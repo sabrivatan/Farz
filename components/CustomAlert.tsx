@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
-import { X } from 'lucide-react-native';
+import { CheckCircle2, XCircle, Info, AlertTriangle } from 'lucide-react-native';
 
 const { width } = Dimensions.get('window');
 
@@ -12,7 +12,7 @@ type CustomAlertProps = {
     cancelText?: string;
     onConfirm?: () => void;
     onCancel?: () => void;
-    type?: 'info' | 'danger' | 'success'; 
+    type?: 'info' | 'danger' | 'success' | 'warning'; 
     showCancel?: boolean;
 };
 
@@ -25,30 +25,60 @@ export default function CustomAlert({
     onConfirm,
     onCancel,
     type = 'info',
-    showCancel = true,
+    showCancel = false,
 }: CustomAlertProps) {
     if (!visible) return null;
 
-    const isDanger = type === 'danger';
+    const getIcon = () => {
+        switch (type) {
+            case 'success':
+                return <CheckCircle2 size={56} color="#CD853F" strokeWidth={2.5} />;
+            case 'danger':
+                return <XCircle size={56} color="#EF4444" strokeWidth={2.5} />;
+            case 'warning':
+                return <AlertTriangle size={56} color="#F59E0B" strokeWidth={2.5} />;
+            case 'info':
+                return <Info size={56} color="#3B82F6" strokeWidth={2.5} />;
+        }
+    };
+
+    const getIconBackground = () => {
+        switch (type) {
+            case 'success':
+                return 'rgba(205, 133, 63, 0.15)';
+            case 'danger':
+                return 'rgba(239, 68, 68, 0.15)';
+            case 'warning':
+                return 'rgba(245, 158, 11, 0.15)';
+            case 'info':
+                return 'rgba(59, 130, 246, 0.15)';
+        }
+    };
 
     return (
         <Modal
             transparent
             animationType="fade"
             visible={visible}
-            onRequestClose={onCancel}
+            onRequestClose={onCancel || onConfirm}
         >
             <View style={styles.overlay}>
                 <View style={styles.alertBox}>
-                    {/* Header: Title + Close option if no cancel button provided */}
-                    <View style={styles.header}>
-                        <Text style={[styles.title, isDanger && styles.dangerTitle]}>{title}</Text>
+                    {/* Icon */}
+                    <View 
+                        style={[
+                            styles.iconContainer,
+                            { backgroundColor: getIconBackground() }
+                        ]}
+                    >
+                        {getIcon()}
                     </View>
 
-                    {/* Content */}
-                    <View style={styles.content}>
-                        <Text style={styles.message}>{message}</Text>
-                    </View>
+                    {/* Title */}
+                    <Text style={styles.title}>{title}</Text>
+
+                    {/* Message */}
+                    <Text style={styles.message}>{message}</Text>
 
                     {/* Actions */}
                     <View style={styles.actions}>
@@ -63,7 +93,8 @@ export default function CustomAlert({
                         <TouchableOpacity 
                             style={[
                                 styles.button, 
-                                isDanger ? styles.dangerButton : styles.primaryButton
+                                styles.confirmButton,
+                                showCancel && { flex: 1 }
                             ]} 
                             onPress={onConfirm}
                         >
@@ -79,77 +110,84 @@ export default function CustomAlert({
 const styles = StyleSheet.create({
     overlay: {
         flex: 1,
-        backgroundColor: 'rgba(0, 0, 0, 0.7)',
+        backgroundColor: 'rgba(0, 0, 0, 0.6)',
         justifyContent: 'center',
         alignItems: 'center',
-        paddingHorizontal: 20,
+        paddingHorizontal: 24,
     },
     alertBox: {
-        width: Math.min(width - 40, 340),
-        backgroundColor: '#4A3D35', // Card Dark
-        borderRadius: 20,
+        width: Math.min(width - 48, 360),
+        backgroundColor: '#065F46', // emerald-card
+        borderRadius: 24,
         padding: 24,
         borderWidth: 1,
         borderColor: 'rgba(255, 255, 255, 0.1)',
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 4 },
-        shadowOpacity: 0.3,
-        shadowRadius: 10,
-        elevation: 10,
-    },
-    header: {
-        marginBottom: 12,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.4,
+        shadowRadius: 16,
+        elevation: 16,
         alignItems: 'center',
     },
+    iconContainer: {
+        width: 88,
+        height: 88,
+        borderRadius: 44,
+        alignItems: 'center',
+        justifyContent: 'center',
+        marginBottom: 16,
+    },
     title: {
-        fontSize: 18,
+        fontSize: 20,
         fontWeight: 'bold',
-        color: '#F5F0E1', // Accent Beige
+        color: '#F5F0E1', // beige
         textAlign: 'center',
-    },
-    dangerTitle: {
-        color: '#A64D3F', // Danger
-    },
-    content: {
-        marginBottom: 24,
+        marginBottom: 8,
     },
     message: {
         fontSize: 14,
-        color: 'rgba(220, 203, 181, 0.8)', // Warm Sand / 80
+        color: 'rgba(245, 240, 225, 0.7)', // beige/70
         textAlign: 'center',
-        lineHeight: 20,
+        lineHeight: 22,
+        marginBottom: 24,
     },
     actions: {
         flexDirection: 'row',
         gap: 12,
-        justifyContent: 'center',
+        width: '100%',
     },
     button: {
-        flex: 1,
-        paddingVertical: 12,
-        borderRadius: 12,
+        paddingVertical: 14,
+        paddingHorizontal: 24,
+        borderRadius: 16,
         alignItems: 'center',
         justifyContent: 'center',
+        minWidth: 100,
     },
-    primaryButton: {
-        backgroundColor: '#CD853F', // Primary
-    },
-    dangerButton: {
-        backgroundColor: '#A64D3F', // Danger
+    confirmButton: {
+        backgroundColor: '#CD853F', // primary-terracotta
+        flex: 1,
+        shadowColor: '#CD853F',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.3,
+        shadowRadius: 8,
+        elevation: 8,
     },
     cancelButton: {
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
+        backgroundColor: 'rgba(255, 255, 255, 0.1)',
         borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.1)',
+        borderColor: 'rgba(255, 255, 255, 0.15)',
+        flex: 1,
     },
     confirmButtonText: {
         color: '#F5F0E1',
         fontWeight: 'bold',
-        fontSize: 14,
+        fontSize: 15,
     },
     cancelButtonText: {
-        color: 'rgba(220, 203, 181, 0.6)', 
+        color: 'rgba(245, 240, 225, 0.7)', 
         fontWeight: '600',
-        fontSize: 14,
+        fontSize: 15,
     },
 });
+

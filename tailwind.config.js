@@ -7,22 +7,42 @@ module.exports = {
     extend: {
       colors: {
         primary: {
-            DEFAULT: '#00C853', // Vivid Green
-            50: '#E0F7FA',
-            100: '#B9F6CA',
-            200: '#69F0AE',
-            300: '#00E676',
-            400: '#00C853',
-            500: '#00C853',
-            600: '#009624', // Darker green for contrast
-            700: '#00600F',
-            800: '#003300',
-            900: '#00251a',
+            DEFAULT: '#CD853F', // Terracotta Orange (From Snippet)
+            terracotta: '#CD853F',
+            50: '#FBE9E7',
+            100: '#FFCCBC',
+            200: '#FFAB91',
+            300: '#FF8A65',
+            400: '#FF7043',
+            500: '#D2691E',
+            600: '#BF360C',
+            700: '#D84315',
+            800: '#BE561B', 
+            900: '#3E2723',
+        },
+        emerald: {
+            deep: '#064E3B', // bg-emerald (From Snippet)
+            card: '#065F46', // card-emerald (From Snippet)
+            light: '#065f46',
+            950: '#022c22',
+        },
+        beige: {
+            DEFAULT: '#F5F0E1', // creamy-beige (From Snippet)
+            calendar: '#FDFBF7', // calendar-bg (From Snippet)
         },
         background: {
-            light: '#F5F7F8', // Soft white/mint
-            dark: '#1B5E20', // Deep Forest Green (Splash)
-        }
+            light: '#F8FAFC', 
+            dark: '#0F172A',
+            DEFAULT: '#F8FAFC',
+        },
+        slate: {
+            900: '#0F172A',
+            800: '#1E293B',
+            700: '#334155',
+            500: '#64748B',
+            400: '#94A3B8',
+            200: '#E2E8F0',
+        },
       },
     },
   },

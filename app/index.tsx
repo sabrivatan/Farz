@@ -37,7 +37,7 @@ export default function Index() {
   }, []);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#020617' }}>
+    <View style={{ flex: 1, backgroundColor: '#064e3b' }}>
         <CustomSplashScreen />
     </View>
   );

@@ -1,794 +1,669 @@
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Switch, Image, Dimensions, Modal, FlatList, ActivityIndicator } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState, useCallback, useRef } from "react";
-// @ts-ignore
-import { getDb } from "@/db";
+import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Switch, Image, Modal, TextInput, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { 
-    Trash2, User, Moon, Bell, MapPin, Globe, CloudUpload, Info, Shield, 
-    ChevronRight, ChevronLeft, Pencil, LogOut, Calculator, X, Check, Map as MapIcon, LocateFixed
-} from "lucide-react-native";
-import { useRouter, useFocusEffect } from "expo-router";
-import CustomAlert from "@/components/CustomAlert";
-import MapView, { Marker, PROVIDER_DEFAULT, Region } from 'react-native-maps';
-import * as Location from 'expo-location';
+    ChevronLeft, ChevronRight, Bell, Globe, 
+    CloudUpload, Trash2, Info, Shield, Edit, LogOut, X, Clock, Camera
+} from 'lucide-react-native';
+import { getDb } from '@/db';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
-const { width, height } = Dimensions.get('window');
-
-// Default initial region (Istanbul)
-const INITIAL_REGION = {
-    latitude: 41.0082,
-    longitude: 28.9784,
-    latitudeDelta: 0.1,
-    longitudeDelta: 0.1,
-};
+const PRAYER_TIMES = [
+    { key: 'fajr', label: 'Sabah' },
+    { key: 'dhuhr', label: 'Öğle' },
+    { key: 'asr', label: 'İkindi' },
+    { key: 'maghrib', label: 'Akşam' },
+    { key: 'isha', label: 'Yatsı' },
+];
 
 export default function SettingsScreen() {
-  const router = useRouter();
-  const [profile, setProfile] = useState<any>(null);
-  const mapRef = useRef<MapView>(null);
-  
-  // Toggles
-  const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-  const [autoLocation, setAutoLocation] = useState(true);
-  
-  // Manual Location
-  const [manualLocation, setManualLocation] = useState<{name: string, lat: number, lng: number}>({ 
-      name: 'İstanbul', 
-      lat: 41.0082, 
-      lng: 28.9784 
-  });
-  
-  // Map State
-  const [mapModalVisible, setMapModalVisible] = useState(false);
-  const [mapRegion, setMapRegion] = useState(INITIAL_REGION);
-  const [tempAddress, setTempAddress] = useState("Konum alınıyor...");
-  const [isGeocoding, setIsGeocoding] = useState(false);
+    const router = useRouter();
+    const [profile, setProfile] = useState<any>(null);
+    const [notificationsEnabled, setNotificationsEnabled] = useState(true);
+    
+    // Profile Edit Modal
+    const [profileModalVisible, setProfileModalVisible] = useState(false);
+    const [editedProfile, setEditedProfile] = useState({
+        name: '',
+        surname: '',
+        email: '',
+        birthDate: '',
+        gender: 'male',
+        bulughDate: '',
+        profileImage: '',
+    });
 
-  // Alert State
-  const [alertConfig, setAlertConfig] = useState<{
-      visible: boolean;
-      title: string;
-      message: string;
-      confirmText?: string;
-      cancelText?: string;
-      onConfirm?: () => void;
-      onCancel?: () => void;
-      type?: 'info' | 'danger' | 'success';
-      showCancel?: boolean;
-  }>({
-      visible: false,
-      title: '',
-      message: '',
-      confirmText: 'Tamam',
-      cancelText: 'Vazgeç',
-      onConfirm: () => {},
-      type: 'info',
-      showCancel: true
-  });
+    // Date Pickers
+    const [showBirthDatePicker, setShowBirthDatePicker] = useState(false);
+    const [showBulughDatePicker, setShowBulughDatePicker] = useState(false);
 
-  const showAlert = (
-      title: string, 
-      message: string, 
-      onConfirm: () => void, 
-      type: 'info' | 'danger' | 'success' = 'info',
-      confirmText = 'Tamam',
-      showCancel = true
-  ) => {
-      setAlertConfig({
-          visible: true,
-          title,
-          message,
-          onConfirm: () => {
-              onConfirm();
-              closeAlert();
-          },
-          onCancel: closeAlert,
-          confirmText,
-          cancelText: 'Vazgeç',
-          type,
-          showCancel
-      });
-  };
+    // Info Modals
+    const [aboutModalVisible, setAboutModalVisible] = useState(false);
+    const [privacyModalVisible, setPrivacyModalVisible] = useState(false);
 
-  const closeAlert = () => {
-      setAlertConfig(prev => ({ ...prev, visible: false }));
-  };
+    // Prayer Reminders
+    const [prayerReminderModalVisible, setPrayerReminderModalVisible] = useState(false);
+    const [prayerReminders, setPrayerReminders] = useState({
+        fajr: true,
+        dhuhr: true,
+        asr: true,
+        maghrib: true,
+        isha: true,
+    });
 
-  useFocusEffect(
-    useCallback(() => {
-        fetchProfile();
-    }, [])
-  );
+    useFocusEffect(
+        useCallback(() => {
+            fetchProfile();
+        }, [])
+    );
 
-  const fetchProfile = async () => {
-    try {
-        const db = getDb();
-        const result: any[] = await db.getAllAsync("SELECT * FROM profile LIMIT 1");
-        if (result.length > 0) setProfile(result[0]);
-    } catch (e) {
-        console.error("Profile fetch error:", e);
-    }
-  };
-
-  // Map Functions
-  const handleMapRegionChange = async (region: Region) => {
-      setMapRegion(region);
-      // Debounce logic could be added here, but for simplicity call directly or on drag end
-  };
-
-  const handleMapRegionChangeComplete = async (region: Region) => {
-      setMapRegion(region);
-      setIsGeocoding(true);
-      try {
-          const result = await Location.reverseGeocodeAsync({
-              latitude: region.latitude,
-              longitude: region.longitude
-          });
-
-          if (result.length > 0) {
-              const addr = result[0];
-              const city = addr.city || addr.subregion || addr.region || addr.country || "Bilinmeyen Konum";
-              const district = addr.district || addr.street || "";
-              setTempAddress(`${city}${district ? `, ${district}` : ''}`);
-          } else {
-              setTempAddress("Konum bilgisi bulunamadı");
-          }
-      } catch (error) {
-          console.error("Geocoding error:", error);
-          setTempAddress("Adres alınamadı");
-      } finally {
-          setIsGeocoding(false);
-      }
-  };
-
-  const confirmLocation = () => {
-      setManualLocation({
-          name: tempAddress,
-          lat: mapRegion.latitude,
-          lng: mapRegion.longitude
-      });
-      setMapModalVisible(false);
-  };
-  
-  const handleOpenMap = async () => {
-      // Permission check?
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-          showAlert('İzin Gerekli', 'Haritayı kullanmak için konum izni vermelisiniz.', () => {}, 'info');
-          return;
-      }
-
-      // Set initial region to current manual location if specific, otherwise Istanbul
-      setMapRegion({
-          latitude: manualLocation.lat,
-          longitude: manualLocation.lng,
-          latitudeDelta: 0.05,
-          longitudeDelta: 0.05,
-      });
-      setMapModalVisible(true);
-  };
-
-  const centerUserLocation = async () => {
-      try {
-          const userLoc = await Location.getCurrentPositionAsync({});
-          const region = {
-              latitude: userLoc.coords.latitude,
-              longitude: userLoc.coords.longitude,
-              latitudeDelta: 0.05,
-              longitudeDelta: 0.05,
-          };
-          mapRef.current?.animateToRegion(region, 1000);
-          handleMapRegionChangeComplete(region); // Trigger update
-      } catch (e) {
-          showAlert("Hata", "Mevcut konum alınamadı.", () => {}, 'danger', 'Tamam', false);
-      }
-  };
-
-
-  const handleReset = () => {
-    showAlert(
-        "Verileri Sıfırla",
-        "Tüm kaza kayıtlarınız ve profiliniz silinecek. Bu işlem geri alınamaz. Emin misiniz?",
-        async () => {
+    const fetchProfile = async () => {
+        try {
             const db = getDb();
-            await db.runAsync("DELETE FROM profile");
-            await db.runAsync("DELETE FROM debt_counts");
-            await db.runAsync("DELETE FROM logs");
-            await db.runAsync("DELETE FROM daily_status");
-            
-            // Re-init defaults
-            const types = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'witr', 'fasting'];
-            for (const type of types) {
-                await db.runAsync('INSERT INTO debt_counts (type, count) VALUES (?, 0)', [type]);
+            const result: any = await db.getFirstAsync('SELECT * FROM profile LIMIT 1');
+            setProfile(result);
+            if (result) {
+                setEditedProfile({
+                    name: result.name || '',
+                    surname: result.surname || '',
+                    email: result.email || '',
+                    birthDate: result.birth_date || '',
+                    gender: result.gender || 'male',
+                    bulughDate: result.bulugh_date || '',
+                    profileImage: result.profile_image || '',
+                });
             }
-            router.replace("/onboarding");
-        },
-        'danger',
-        'Sıfırla'
-    );
-  };
+        } catch (error) {
+            console.error('Error fetching profile:', error);
+        }
+    };
 
-  const handleRecalculate = () => {
-      // Re-run wizard to edit calculations and profile
-      router.push("/calculation/wizard");
-  }
+    const handleSaveProfile = async () => {
+        try {
+            const db = getDb();
+            await db.runAsync(
+                `UPDATE profile SET 
+                    name = ?, 
+                    surname = ?, 
+                    email = ?,
+                    birth_date = ?, 
+                    gender = ?, 
+                    bulugh_date = ?,
+                    profile_image = ?
+                WHERE id = 1`,
+                [editedProfile.name, editedProfile.surname, editedProfile.email, editedProfile.birthDate, editedProfile.gender, editedProfile.bulughDate, editedProfile.profileImage]
+            );
+            await fetchProfile();
+            setProfileModalVisible(false);
+        } catch (error) {
+            console.error('Error saving profile:', error);
+        }
+    };
 
-  const handleBackup = () => {
-      showAlert("Bilgi", "Bulut yedekleme özelliği yakında eklenecek.", () => {}, 'info', 'Tamam', false);
-  }
+    const toggleAllPrayerReminders = (enabled: boolean) => {
+        setPrayerReminders({
+            fajr: enabled,
+            dhuhr: enabled,
+            asr: enabled,
+            maghrib: enabled,
+            isha: enabled,
+        });
+    };
 
-  const handleLogout = () => {
-      showAlert(
-          "Çıkış Yap", 
-          "Oturumu kapatmak istediğinize emin misiniz?", 
-          () => router.replace("/auth"), 
-          'danger', 
-          'Çıkış Yap'
-      );
-  }
+    const isAnyPrayerReminderEnabled = Object.values(prayerReminders).some(v => v);
 
-  const handleLanguage = () => {
-      // Simple language selection simulation
-      showAlert(
-          "Dil Seçimi", 
-          "Şu an için sadece Türkçe dili desteklenmektedir.\n\n(İleride: TR, EN, AR)", 
-          () => {}, 
-          'info', 
-          'Tamam', 
-          false
-      );
-  }
+    const handleResetData = () => {
+        // TODO: Implement reset data functionality
+        console.log('Reset data');
+    };
 
-  const handlePrivacy = () => {
-    showAlert(
-        "Gizlilik Politikası", 
-        "Farz uygulaması verilerinizi sadece cihazınızda saklar. Bulut senkronizasyonu aktif değildir. Kişisel verileriniz (doğum tarihi vb.) sadece namaz vakti ve kaza hesaplaması için kullanılır.", 
-        () => {}, 
-        'info', 
-        'Anladım', 
-        false
-    );
-  }
+    const handleLogout = async () => {
+        try {
+            const db = getDb();
+            // Clear profile data
+            await db.runAsync('DELETE FROM profile');
+            // Navigate to onboarding
+            router.replace('/onboarding');
+        } catch (error) {
+            console.error('Logout error:', error);
+        }
+    };
 
-  return (
-    <View style={styles.container}>
-        <CustomAlert 
-            visible={alertConfig.visible}
-            title={alertConfig.title}
-            message={alertConfig.message}
-            onConfirm={alertConfig.onConfirm}
-            onCancel={closeAlert}
-            confirmText={alertConfig.confirmText}
-            cancelText={alertConfig.cancelText}
-            type={alertConfig.type}
-            showCancel={alertConfig.showCancel}
-        />
-        
-        {/* Map Selection Modal */}
-        <Modal
-            visible={mapModalVisible}
-            animationType="slide"
-            onRequestClose={() => setMapModalVisible(false)}
-        >
-            <View style={{ flex: 1, backgroundColor: '#3E322A' }}>
-                <MapView
-                    ref={mapRef}
-                    style={{ flex: 1 }}
-                    provider={PROVIDER_DEFAULT}
-                    initialRegion={mapRegion}
-                    onRegionChangeComplete={handleMapRegionChangeComplete}
-                    showsUserLocation
-                />
-                
-                {/* Center Pin Overlay */}
-                <View style={styles.centerPinContainer} pointerEvents="none">
-                    <MapPin size={40} color="#CD853F" fill="#3E322A" />
+    return (
+        <View className="flex-1 bg-emerald-deep">
+            <SafeAreaView className="flex-1" edges={['top']}>
+                {/* Header */}
+                <View className="px-4 py-4 flex-row items-center border-b border-white/10">
+                    <TouchableOpacity onPress={router.back} className="p-2 -ml-2">
+                        <ChevronLeft color="#F5F0E1" size={24} />
+                    </TouchableOpacity>
+                    <Text className="flex-1 text-center text-lg font-bold text-beige mr-8">
+                        Ayarlar
+                    </Text>
                 </View>
 
-                {/* Top Controls */}
-                <SafeAreaView style={styles.mapTopControls} pointerEvents="box-none">
-                     <TouchableOpacity 
-                        style={styles.closeMapButton} 
-                        onPress={() => setMapModalVisible(false)}
-                    >
-                        <X size={24} color="#3E322A" />
-                    </TouchableOpacity>
-                    <TouchableOpacity 
-                        style={styles.locateButton} 
-                        onPress={centerUserLocation}
-                    >
-                        <LocateFixed size={24} color="#3E322A" />
-                    </TouchableOpacity>
-                </SafeAreaView>
-
-                {/* Bottom Address Card */}
-                <View style={styles.mapBottomCard}>
-                     <View style={styles.dragHandle} />
-                     <Text style={styles.mapLabel}>Seçilen Konum</Text>
-                     <View style={styles.addressContainer}>
-                         {isGeocoding ? (
-                             <ActivityIndicator color="#CD853F" />
-                         ) : (
-                             <Text style={styles.addressText}>{tempAddress}</Text>
-                         )}
-                     </View>
-                     <TouchableOpacity 
-                        style={styles.confirmLocationButton} 
-                        onPress={confirmLocation}
-                     >
-                         <Text style={styles.confirmLocationText}>Bu Konumu Onayla</Text>
-                     </TouchableOpacity>
-                </View>
-            </View>
-        </Modal>
-
-        <SafeAreaView style={styles.safeArea} edges={['top']}>
-            {/* Header */}
-            <View style={styles.header}>
-                <TouchableOpacity style={styles.headerButton} onPress={() => router.back()}>
-                    <ChevronLeft color="#F5F0E1" size={24} />
-                </TouchableOpacity>
-                <Text style={styles.headerTitle}>Ayarlar</Text>
-                {/* Placeholder for balance */}
-                <View style={styles.headerButton} />
-            </View>
-
-            <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
-                
-                {/* Profile Section */}
-                <View style={styles.profileSection}>
-                    <View style={styles.avatarContainer}>
-                        <View style={styles.avatarCircle}>
-                            <User size={48} color="rgba(220, 203, 181, 0.5)" />
+                <ScrollView className="flex-1 px-4 py-6" showsVerticalScrollIndicator={false}>
+                    {/* Profile Section */}
+                    <View className="flex-col items-center gap-3 py-2 mb-8">
+                        <View className="relative">
+                            <View className="w-24 h-24 rounded-full bg-emerald-card border-2 border-primary/30 items-center justify-center overflow-hidden">
+                                {profile?.profile_image ? (
+                                    <Image source={{ uri: profile.profile_image }} className="w-full h-full" />
+                                ) : (
+                                    <Text className="text-5xl text-beige/40">👤</Text>
+                                )}
+                            </View>
+                            <TouchableOpacity 
+                                onPress={() => setProfileModalVisible(true)}
+                                className="absolute bottom-0 right-0 bg-primary p-2 rounded-full shadow-lg"
+                            >
+                                <Edit size={14} color="#FFFFFF" />
+                            </TouchableOpacity>
                         </View>
-                        {/* Removed Edit Button Here as requested */}
+                        <View className="items-center">
+                            <Text className="text-xl font-bold text-beige">
+                                {profile?.name ? `${profile.name} ${profile.surname || ''}`.trim() : 'Profil Bilgisi Yok'}
+                            </Text>
+                            <Text className="text-xs text-beige/60">
+                                {profile?.birth_date || 'Doğum tarihi girilmemiş'}
+                            </Text>
+                        </View>
                     </View>
-                    <View style={styles.profileInfo}>
-                        <Text style={styles.profileName}>{profile?.name || "Misafir Kullanıcı"}</Text>
-                        <Text style={styles.profileEmail}>
-                            {profile?.email || "misafir@farzapp.com"}
+
+                    {/* GENEL Section */}
+                    <View className="mb-8">
+                        <Text className="text-xs font-semibold text-beige uppercase tracking-widest px-1 mb-2">
+                            GENEL
                         </Text>
+                        <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
+                            {/* Bildirimler */}
+                            <View className="flex-row items-center justify-between p-4 border-b border-white/5">
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
+                                        <Bell size={20} color="#CD853F" />
+                                    </View>
+                                    <Text className="text-sm font-medium text-beige">Bildirimler</Text>
+                                </View>
+                                <Switch
+                                    value={notificationsEnabled}
+                                    onValueChange={setNotificationsEnabled}
+                                    trackColor={{ false: 'rgba(0, 0, 0, 0.4)', true: '#CD853F' }}
+                                    thumbColor="#FFFFFF"
+                                    ios_backgroundColor="rgba(0, 0, 0, 0.4)"
+                                />
+                            </View>
+
+                            {/* Vakit Hatırlatıcı */}
+                            <TouchableOpacity 
+                                onPress={() => setPrayerReminderModalVisible(true)}
+                                className="flex-row items-center justify-between p-4 border-b border-white/5"
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
+                                        <Clock size={20} color="#CD853F" />
+                                    </View>
+                                    <Text className="text-sm font-medium text-beige">Vakit Hatırlatıcı</Text>
+                                </View>
+                                <View className="flex-row items-center gap-1">
+                                    <Text className="text-xs text-beige/50">
+                                        {isAnyPrayerReminderEnabled ? 'Aktif' : 'Kapalı'}
+                                    </Text>
+                                    <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
+                                </View>
+                            </TouchableOpacity>
+
+                            {/* Dil */}
+                            <TouchableOpacity className="flex-row items-center justify-between p-4">
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
+                                        <Globe size={20} color="#CD853F" />
+                                    </View>
+                                    <Text className="text-sm font-medium text-beige">Dil</Text>
+                                </View>
+                                <View className="flex-row items-center gap-1">
+                                    <Text className="text-xs text-beige/50">Türkçe</Text>
+                                    <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
+                                </View>
+                            </TouchableOpacity>
+                        </View>
                     </View>
-                </View>
 
-                {/* Section: General */}
-                <View style={styles.sectionContainer}>
-                    <Text style={styles.sectionTitle}>GENEL</Text>
-                    <View style={styles.card}>
-                        
-                        {/* Notification Toggle */}
-                        <View style={styles.menuItem}>
-                            <View style={styles.menuLeft}>
-                                <View style={styles.iconBox}>
-                                    <Bell size={20} color="#CD853F" />
+                    {/* HESAP VE VERİ Section */}
+                    <View className="mb-8">
+                        <Text className="text-xs font-semibold text-beige uppercase tracking-widest px-1 mb-2">
+                            HESAP VE VERİ
+                        </Text>
+                        <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
+                            {/* Verileri Yedekle */}
+                            <TouchableOpacity className="flex-row items-center justify-between p-4 border-b border-white/5">
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
+                                        <CloudUpload size={20} color="#CD853F" />
+                                    </View>
+                                    <Text className="text-sm font-medium text-beige">Verileri Yedekle</Text>
                                 </View>
-                                <Text style={styles.menuText}>Bildirimler</Text>
-                            </View>
-                            <Switch
-                                trackColor={{ false: "#3E322A", true: "#CD853F" }}
-                                thumbColor={notificationsEnabled ? "#F5F0E1" : "#f4f3f4"}
-                                ios_backgroundColor="#3E322A"
-                                onValueChange={() => setNotificationsEnabled(prev => !prev)}
-                                value={notificationsEnabled}
-                            />
-                        </View>
-                        
-                        <View style={styles.separator} />
+                                <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
+                            </TouchableOpacity>
 
-                        {/* Location Toggle (Auto/Manual) */}
-                        <View style={styles.menuItem}>
-                            <View style={styles.menuLeft}>
-                                <View style={styles.iconBox}>
-                                    <MapPin size={20} color="#CD853F" />
+                            {/* Verileri Sıfırla */}
+                            <TouchableOpacity 
+                                onPress={handleResetData}
+                                className="flex-row items-center justify-between p-4"
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-red-500/10 items-center justify-center">
+                                        <Trash2 size={20} color="#EF4444" />
+                                    </View>
+                                    <Text className="text-sm font-medium text-red-400">Verileri Sıfırla</Text>
                                 </View>
-                                <View>
-                                    <Text style={styles.menuText}>Otomatik Konum</Text>
-                                    <Text style={styles.subText}>{autoLocation ? 'GPS Kullanılıyor' : 'Manuel Seçim'}</Text>
-                                </View>
-                            </View>
-                            <Switch
-                                trackColor={{ false: "#3E322A", true: "#CD853F" }}
-                                thumbColor={autoLocation ? "#F5F0E1" : "#f4f3f4"}
-                                ios_backgroundColor="#3E322A"
-                                onValueChange={() => setAutoLocation(prev => !prev)}
-                                value={autoLocation}
-                            />
+                                <ChevronRight size={20} color="rgba(239, 68, 68, 0.3)" />
+                            </TouchableOpacity>
                         </View>
-                        
-                        {/* Manual Location Selection Row (Visible only if Auto is OFF) */}
-                        {!autoLocation && (
-                            <>
-                                <View style={styles.separator} />
-                                <TouchableOpacity style={styles.menuItem} onPress={handleOpenMap}>
-                                    <View style={styles.menuLeft}>
-                                        <View style={[styles.iconBox, { backgroundColor: 'transparent' }]} /> 
-                                        {/* Spacer */}
-                                        <View style={{ flex: 1, paddingRight: 8 }}>
-                                            <Text style={styles.menuText}>Seçili Konum</Text>
-                                            <Text 
-                                                style={[styles.subText, { color: '#CD853F' }]}
-                                                numberOfLines={1}
-                                            >
-                                                {manualLocation.name}
-                                            </Text>
-                                        </View>
+                    </View>
+
+                    {/* UYGULAMA Section */}
+                    <View className="mb-8">
+                        <Text className="text-xs font-semibold text-beige uppercase tracking-widest px-1 mb-2">
+                            UYGULAMA
+                        </Text>
+                        <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
+                            {/* Hakkında */}
+                            <TouchableOpacity 
+                                onPress={() => setAboutModalVisible(true)}
+                                className="flex-row items-center justify-between p-4 border-b border-white/5"
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
+                                        <Info size={20} color="#CD853F" />
                                     </View>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                                        <MapIcon size={16} color="#CD853F" style={{ marginRight: 4 }} />
-                                        <ChevronRight size={20} color="rgba(220, 203, 181, 0.3)" />
+                                    <Text className="text-sm font-medium text-beige">Hakkında</Text>
+                                </View>
+                                <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
+                            </TouchableOpacity>
+
+                            {/* Gizlilik Politikası */}
+                            <TouchableOpacity 
+                                onPress={() => setPrivacyModalVisible(true)}
+                                className="flex-row items-center justify-between p-4"
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
+                                        <Shield size={20} color="#CD853F" />
                                     </View>
+                                    <Text className="text-sm font-medium text-beige">Gizlilik Politikası</Text>
+                                </View>
+                                <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+
+                    {/* Logout Button */}
+                    <TouchableOpacity 
+                        onPress={handleLogout}
+                        className="w-full py-4 items-center"
+                    >
+                        <Text className="text-sm font-bold text-primary">Oturumu Kapat</Text>
+                    </TouchableOpacity>
+
+                    {/* Version */}
+                    <View className="items-center pb-8 mt-4">
+                        <Text className="text-[10px] text-beige/30">Farz v2.4.0 (2024)</Text>
+                    </View>
+                </ScrollView>
+            </SafeAreaView>
+
+            {/* Profile Edit Modal */}
+            <Modal
+                visible={profileModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setProfileModalVisible(false)}
+            >
+                <View className="flex-1 bg-black/50 justify-end">
+                    <View className="bg-emerald-deep rounded-t-3xl p-6 max-h-[80%]">
+                        <View className="flex-row items-center justify-between mb-6">
+                            <Text className="text-xl font-bold text-beige">Profili Düzenle</Text>
+                            <TouchableOpacity onPress={() => setProfileModalVisible(false)}>
+                                <X size={24} color="#F5F0E1" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            {/* Profile Image */}
+                            <View className="mb-6 items-center">
+                                <View className="relative">
+                                    <View className="w-24 h-24 rounded-full bg-emerald-card border-2 border-primary/30 items-center justify-center overflow-hidden">
+                                        {editedProfile.profileImage ? (
+                                            <Image source={{ uri: editedProfile.profileImage }} className="w-full h-full" />
+                                        ) : (
+                                            <Text className="text-5xl text-beige/40">👤</Text>
+                                        )}
+                                    </View>
+                                    <TouchableOpacity className="absolute bottom-0 right-0 bg-primary p-2 rounded-full">
+                                        <Camera size={14} color="#FFFFFF" />
+                                    </TouchableOpacity>
+                                </View>
+                                <Text className="text-xs text-beige/50 mt-2">Profil fotoğrafı ekle</Text>
+                            </View>
+
+                            {/* Ad */}
+                            <View className="mb-4">
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Ad</Text>
+                                <TextInput
+                                    value={editedProfile.name}
+                                    onChangeText={(text) => setEditedProfile({ ...editedProfile, name: text })}
+                                    className="bg-emerald-card border border-white/10 rounded-xl p-4 text-beige"
+                                    placeholderTextColor="rgba(245, 240, 225, 0.3)"
+                                    placeholder="Adınız"
+                                />
+                            </View>
+
+                            {/* Soyad */}
+                            <View className="mb-4">
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Soyad</Text>
+                                <TextInput
+                                    value={editedProfile.surname}
+                                    onChangeText={(text) => setEditedProfile({ ...editedProfile, surname: text })}
+                                    className="bg-emerald-card border border-white/10 rounded-xl p-4 text-beige"
+                                    placeholderTextColor="rgba(245, 240, 225, 0.3)"
+                                    placeholder="Soyadınız"
+                                />
+                            </View>
+
+                            {/* Email */}
+                            <View className="mb-4">
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Email</Text>
+                                <TextInput
+                                    value={editedProfile.email}
+                                    onChangeText={(text) => setEditedProfile({ ...editedProfile, email: text })}
+                                    className="bg-emerald-card border border-white/10 rounded-xl p-4 text-beige"
+                                    placeholderTextColor="rgba(245, 240, 225, 0.3)"
+                                    placeholder="ornek@email.com"
+                                    keyboardType="email-address"
+                                    autoCapitalize="none"
+                                />
+                            </View>
+
+                            {/* Doğum Tarihi */}
+                            <View className="mb-4">
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Doğum Tarihi</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowBirthDatePicker(true)}
+                                    className="bg-emerald-card border border-white/10 rounded-xl p-4"
+                                >
+                                    <Text className="text-beige">
+                                        {editedProfile.birthDate || 'Tarih seçin'}
+                                    </Text>
                                 </TouchableOpacity>
-                            </>
-                        )}
+                                {showBirthDatePicker && (
+                                    <DateTimePicker
+                                        value={editedProfile.birthDate ? new Date(editedProfile.birthDate) : new Date()}
+                                        mode="date"
+                                        display="default"
+                                        onChange={(event, selectedDate) => {
+                                            setShowBirthDatePicker(Platform.OS === 'ios');
+                                            if (selectedDate) {
+                                                setEditedProfile({ ...editedProfile, birthDate: selectedDate.toISOString().split('T')[0] });
+                                            }
+                                        }}
+                                    />
+                                )}
+                            </View>
 
-
-                        <View style={styles.separator} />
-
-                        {/* Language */}
-                        <TouchableOpacity style={styles.menuItem} onPress={handleLanguage}>
-                            <View style={styles.menuLeft}>
-                                <View style={styles.iconBox}>
-                                    <Globe size={20} color="#CD853F" />
+                            {/* Cinsiyet */}
+                            <View className="mb-4">
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Cinsiyet</Text>
+                                <View className="flex-row gap-3">
+                                    <TouchableOpacity
+                                        onPress={() => setEditedProfile({ ...editedProfile, gender: 'male' })}
+                                        className="flex-1 p-4 rounded-xl border"
+                                        style={{
+                                            backgroundColor: editedProfile.gender === 'male' ? '#CD853F' : '#065F46',
+                                            borderColor: editedProfile.gender === 'male' ? 'rgba(205, 133, 63, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                                        }}
+                                    >
+                                        <Text className="text-center font-bold" style={{ color: editedProfile.gender === 'male' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>
+                                            Erkek
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        onPress={() => setEditedProfile({ ...editedProfile, gender: 'female' })}
+                                        className="flex-1 p-4 rounded-xl border"
+                                        style={{
+                                            backgroundColor: editedProfile.gender === 'female' ? '#CD853F' : '#065F46',
+                                            borderColor: editedProfile.gender === 'female' ? 'rgba(205, 133, 63, 0.2)' : 'rgba(255, 255, 255, 0.1)',
+                                        }}
+                                    >
+                                        <Text className="text-center font-bold" style={{ color: editedProfile.gender === 'female' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>
+                                            Kadın
+                                        </Text>
+                                    </TouchableOpacity>
                                 </View>
-                                <Text style={styles.menuText}>Dil</Text>
                             </View>
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                <Text style={styles.valueText}>Türkçe</Text>
-                                <ChevronRight size={20} color="rgba(220, 203, 181, 0.3)" />
-                            </View>
-                        </TouchableOpacity>
 
+                            {/* Buluğ Çağı Başlangıcı */}
+                            <View className="mb-6">
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Buluğ Çağı Başlangıcı</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowBulughDatePicker(true)}
+                                    className="bg-emerald-card border border-white/10 rounded-xl p-4"
+                                >
+                                    <Text className="text-beige">
+                                        {editedProfile.bulughDate || 'Tarih seçin'}
+                                    </Text>
+                                </TouchableOpacity>
+                                {showBulughDatePicker && (
+                                    <DateTimePicker
+                                        value={editedProfile.bulughDate ? new Date(editedProfile.bulughDate) : new Date()}
+                                        mode="date"
+                                        display="default"
+                                        onChange={(event, selectedDate) => {
+                                            setShowBulughDatePicker(Platform.OS === 'ios');
+                                            if (selectedDate) {
+                                                setEditedProfile({ ...editedProfile, bulughDate: selectedDate.toISOString().split('T')[0] });
+                                            }
+                                        }}
+                                    />
+                                )}
+                            </View>
+
+                            {/* Save Button */}
+                            <TouchableOpacity
+                                onPress={handleSaveProfile}
+                                className="bg-primary py-4 rounded-2xl shadow-lg mb-4"
+                            >
+                                <Text className="text-beige font-bold text-center text-base">Kaydet</Text>
+                            </TouchableOpacity>
+                        </ScrollView>
                     </View>
                 </View>
+            </Modal>
 
-                {/* Section: Account & Data */}
-                <View style={styles.sectionContainer}>
-                    <Text style={styles.sectionTitle}>HESAP VE VERİ</Text>
-                    <View style={styles.card}>
-                        
-                         {/* Recalculate */}
-                         <TouchableOpacity style={styles.menuItem} onPress={handleRecalculate}>
-                            <View style={styles.menuLeft}>
-                                <View style={styles.iconBox}>
-                                    <Calculator size={20} color="#CD853F" />
-                                </View>
-                                <Text style={styles.menuText}>Hesaplamayı Düzenle</Text>
+            {/* Prayer Reminder Modal */}
+            <Modal
+                visible={prayerReminderModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setPrayerReminderModalVisible(false)}
+            >
+                <View className="flex-1 bg-black/50 justify-end">
+                    <View className="bg-emerald-deep rounded-t-3xl p-6">
+                        <View className="flex-row items-center justify-between mb-6">
+                            <Text className="text-xl font-bold text-beige">Vakit Hatırlatıcı</Text>
+                            <TouchableOpacity onPress={() => setPrayerReminderModalVisible(false)}>
+                                <X size={24} color="#F5F0E1" />
+                            </TouchableOpacity>
+                        </View>
+
+                        {/* Toggle All */}
+                        <View className="bg-emerald-card rounded-2xl p-4 mb-4 border border-white/5">
+                            <View className="flex-row items-center justify-between">
+                                <Text className="text-sm font-bold text-beige">Tümünü {isAnyPrayerReminderEnabled ? 'Kapat' : 'Aç'}</Text>
+                                <TouchableOpacity
+                                    onPress={() => toggleAllPrayerReminders(!isAnyPrayerReminderEnabled)}
+                                    className="bg-primary px-6 py-2 rounded-xl"
+                                >
+                                    <Text className="text-beige font-bold text-xs">
+                                        {isAnyPrayerReminderEnabled ? 'Kapat' : 'Aç'}
+                                    </Text>
+                                </TouchableOpacity>
                             </View>
-                            <ChevronRight size={20} color="rgba(220, 203, 181, 0.3)" />
-                        </TouchableOpacity>
+                        </View>
 
-                        <View style={styles.separator} />
-
-                        {/* Backup */}
-                        <TouchableOpacity style={styles.menuItem} onPress={handleBackup}>
-                            <View style={styles.menuLeft}>
-                                <View style={styles.iconBox}>
-                                    <CloudUpload size={20} color="#CD853F" />
+                        {/* Individual Prayer Toggles */}
+                        <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
+                            {PRAYER_TIMES.map((prayer, index) => (
+                                <View
+                                    key={prayer.key}
+                                    className="flex-row items-center justify-between p-4"
+                                    style={{
+                                        borderBottomWidth: index < PRAYER_TIMES.length - 1 ? 1 : 0,
+                                        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
+                                    }}
+                                >
+                                    <Text className="text-sm font-medium text-beige">{prayer.label}</Text>
+                                    <Switch
+                                        value={prayerReminders[prayer.key as keyof typeof prayerReminders]}
+                                        onValueChange={(value) =>
+                                            setPrayerReminders({ ...prayerReminders, [prayer.key]: value })
+                                        }
+                                        trackColor={{ false: 'rgba(0, 0, 0, 0.4)', true: '#CD853F' }}
+                                        thumbColor="#FFFFFF"
+                                        ios_backgroundColor="rgba(0, 0, 0, 0.4)"
+                                    />
                                 </View>
-                                <Text style={styles.menuText}>Verileri Yedekle</Text>
-                            </View>
-                            <ChevronRight size={20} color="rgba(220, 203, 181, 0.3)" />
-                        </TouchableOpacity>
+                            ))}
+                        </View>
 
-                        <View style={styles.separator} />
-
-                        {/* Reset Data (Danger) */}
-                        <TouchableOpacity style={styles.menuItem} onPress={handleReset}>
-                            <View style={styles.menuLeft}>
-                                <View style={[styles.iconBox, { backgroundColor: 'rgba(166, 77, 63, 0.1)' }]}>
-                                    <Trash2 size={20} color="#A64D3F" />
-                                </View>
-                                <Text style={[styles.menuText, { color: '#A64D3F' }]}>Verileri Sıfırla</Text>
-                            </View>
-                            <ChevronRight size={20} color="rgba(166, 77, 63, 0.3)" />
-                        </TouchableOpacity>
-
+                        <View className="mt-4">
+                            <Text className="text-xs text-beige/50 text-center">
+                                En az bir vakit açık olduğunda hatırlatıcı aktif olur
+                            </Text>
+                        </View>
                     </View>
                 </View>
+            </Modal>
 
-                {/* Section: App */}
-                <View style={styles.sectionContainer}>
-                    <Text style={styles.sectionTitle}>UYGULAMA</Text>
-                    <View style={styles.card}>
-                        
-                        {/* About */}
-                        <TouchableOpacity style={styles.menuItem} onPress={() => showAlert("Hakkında", "Farz v2.4.0\n\nGeliştirici: vtn.company\n\nAllah kabul etsin.", () => {}, 'info', 'Tamam', false)}>
-                            <View style={styles.menuLeft}>
-                                <View style={styles.iconBox}>
-                                    <Info size={20} color="#CD853F" />
+            {/* About Modal */}
+            <Modal
+                visible={aboutModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setAboutModalVisible(false)}
+            >
+                <View className="flex-1 bg-black/50 justify-end">
+                    <View className="bg-emerald-deep rounded-t-3xl p-6 max-h-[80%]">
+                        <View className="flex-row items-center justify-between mb-6">
+                            <Text className="text-xl font-bold text-beige">Hakkında</Text>
+                            <TouchableOpacity onPress={() => setAboutModalVisible(false)}>
+                                <X size={24} color="#F5F0E1" />
+                            </TouchableOpacity>
+                        </View>
+
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <View className="space-y-4">
+                                <View>
+                                    <Text className="text-lg font-bold text-beige mb-2">Farz Uygulaması</Text>
+                                    <Text className="text-sm text-beige/70 leading-relaxed">
+                                        Farz, Müslümanların namaz ve oruç borçlarını takip etmelerini kolaylaştırmak için geliştirilmiş bir uygulamadır.
+                                    </Text>
                                 </View>
-                                <Text style={styles.menuText}>Hakkında</Text>
-                            </View>
-                            <ChevronRight size={20} color="rgba(220, 203, 181, 0.3)" />
-                        </TouchableOpacity>
 
-                        <View style={styles.separator} />
-
-                        {/* Privacy Policy */}
-                        <TouchableOpacity style={styles.menuItem} onPress={handlePrivacy}>
-                            <View style={styles.menuLeft}>
-                                <View style={styles.iconBox}>
-                                    <Shield size={20} color="#CD853F" />
+                                <View>
+                                    <Text className="text-base font-bold text-beige mb-2">Özellikler</Text>
+                                    <Text className="text-sm text-beige/70 leading-relaxed">
+                                        • Namaz ve oruç borçlarınızı kolayca takip edin{"\n"}
+                                        • Günlük, haftalık ve aylık istatistiklerinizi görüntüleyin{"\n"}
+                                        • Vakit hatırlatıcıları ile ibadetlerinizi aksatmayın{"\n"}
+                                        • Geçmiş kayıtlarınızı düzenleyin ve yönetin{"\n"}
+                                        • Tahmini tamamlanma tarihini öğrenin
+                                    </Text>
                                 </View>
-                                <Text style={styles.menuText}>Gizlilik Politikası</Text>
-                            </View>
-                            <ChevronRight size={20} color="rgba(220, 203, 181, 0.3)" />
-                        </TouchableOpacity>
 
+                                <View>
+                                    <Text className="text-base font-bold text-beige mb-2">İletişim</Text>
+                                    <Text className="text-sm text-beige/70 leading-relaxed">
+                                        Sorularınız ve önerileriniz için:{"\n"}
+                                        destek@farzapp.com
+                                    </Text>
+                                </View>
+
+                                <View className="pt-4 border-t border-white/10">
+                                    <Text className="text-xs text-beige/50 text-center">
+                                        Farz v2.4.0 (2024){"\n"}
+                                        © 2024 Tüm hakları saklıdır.
+                                    </Text>
+                                </View>
+                            </View>
+                        </ScrollView>
                     </View>
                 </View>
+            </Modal>
 
-                {/* Logout Button */}
-                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-                    <Text style={styles.logoutText}>Oturumu Kapat</Text>
-                </TouchableOpacity>
+            {/* Privacy Policy Modal */}
+            <Modal
+                visible={privacyModalVisible}
+                animationType="slide"
+                transparent={true}
+                onRequestClose={() => setPrivacyModalVisible(false)}
+            >
+                <View className="flex-1 bg-black/50 justify-end">
+                    <View className="bg-emerald-deep rounded-t-3xl p-6 max-h-[80%]">
+                        <View className="flex-row items-center justify-between mb-6">
+                            <Text className="text-xl font-bold text-beige">Gizlilik Politikası</Text>
+                            <TouchableOpacity onPress={() => setPrivacyModalVisible(false)}>
+                                <X size={24} color="#F5F0E1" />
+                            </TouchableOpacity>
+                        </View>
 
-                {/* Footer Info */}
-                <View style={styles.footer}>
-                    <Text style={styles.footerText}>Farz v2.4.0 (2024)</Text>
+                        <ScrollView showsVerticalScrollIndicator={false}>
+                            <View className="space-y-4">
+                                <View>
+                                    <Text className="text-base font-bold text-beige mb-2">Veri Toplama</Text>
+                                    <Text className="text-sm text-beige/70 leading-relaxed">
+                                        Farz uygulaması, yalnızca sizin tarafınızdan girilen kişisel bilgileri (ad, soyad, doğum tarihi, cinsiyet) ve ibadet kayıtlarınızı cihazınızda yerel olarak saklar. Bu veriler hiçbir şekilde üçüncü taraflarla paylaşılmaz.
+                                    </Text>
+                                </View>
+
+                                <View>
+                                    <Text className="text-base font-bold text-beige mb-2">Veri Güvenliği</Text>
+                                    <Text className="text-sm text-beige/70 leading-relaxed">
+                                        Tüm verileriniz cihazınızın yerel veritabanında şifrelenmiş olarak saklanır. Uygulama, internet bağlantısı gerektirmez ve verileriniz yalnızca sizin kontrolünüzdedir.
+                                    </Text>
+                                </View>
+
+                                <View>
+                                    <Text className="text-base font-bold text-beige mb-2">Bildirimler</Text>
+                                    <Text className="text-sm text-beige/70 leading-relaxed">
+                                        Vakit hatırlatıcıları için yerel bildirimler kullanılır. Bu bildirimler yalnızca cihazınızda oluşturulur ve hiçbir veri dışarıya gönderilmez.
+                                    </Text>
+                                </View>
+
+                                <View>
+                                    <Text className="text-base font-bold text-beige mb-2">Veri Silme</Text>
+                                    <Text className="text-sm text-beige/70 leading-relaxed">
+                                        Ayarlar menüsünden "Verileri Sıfırla" seçeneğini kullanarak tüm verilerinizi kalıcı olarak silebilirsiniz. Bu işlem geri alınamaz.
+                                    </Text>
+                                </View>
+
+                                <View>
+                                    <Text className="text-base font-bold text-beige mb-2">Değişiklikler</Text>
+                                    <Text className="text-sm text-beige/70 leading-relaxed">
+                                        Bu gizlilik politikası zaman zaman güncellenebilir. Önemli değişiklikler olduğunda uygulama içinde bilgilendirileceksiniz.
+                                    </Text>
+                                </View>
+
+                                <View className="pt-4 border-t border-white/10">
+                                    <Text className="text-xs text-beige/50 text-center">
+                                        Son güncelleme: 12 Şubat 2026
+                                    </Text>
+                                </View>
+                            </View>
+                        </ScrollView>
+                    </View>
                 </View>
-
-            </ScrollView>
-        </SafeAreaView>
-    </View>
-  );
+            </Modal>
+        </View>
+    );
 }
-
-const styles = StyleSheet.create({
-    container: {
-        flex: 1,
-        backgroundColor: '#3E322A', // Deep Espresso Brown
-    },
-    safeArea: {
-        flex: 1,
-    },
-    header: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        paddingHorizontal: 16,
-        paddingVertical: 12,
-        backgroundColor: 'rgba(62, 50, 42, 0.9)', // slightly transparent
-        borderBottomWidth: 1,
-        borderBottomColor: 'rgba(255, 255, 255, 0.05)',
-    },
-    headerButton: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    headerTitle: {
-        fontSize: 18,
-        fontWeight: 'bold',
-        color: '#F5F0E1',
-    },
-    scrollContent: {
-        paddingHorizontal: 16,
-        paddingTop: 24,
-        paddingBottom: 40,
-        maxWidth: 480, // max-w-md approx
-        alignSelf: 'center',
-        width: '100%',
-    },
-    profileSection: {
-        alignItems: 'center',
-        marginBottom: 32,
-        paddingVertical: 8,
-    },
-    avatarContainer: {
-        position: 'relative',
-        marginBottom: 12,
-    },
-    avatarCircle: {
-        width: 96, // w-24
-        height: 96,
-        borderRadius: 48,
-        backgroundColor: '#4A3D35', // card-dark
-        borderWidth: 2,
-        borderColor: 'rgba(205, 133, 63, 0.3)', // primary/30
-        alignItems: 'center',
-        justifyContent: 'center',
-        overflow: 'hidden',
-    },
-    editButton: {
-        position: 'absolute',
-        bottom: 0,
-        right: 0,
-        backgroundColor: '#CD853F', // primary
-        padding: 8,
-        borderRadius: 20,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.3,
-        shadowRadius: 4,
-        elevation: 4,
-    },
-    profileInfo: {
-        alignItems: 'center',
-    },
-    profileName: {
-        fontSize: 20, // text-xl
-        fontWeight: 'bold',
-        color: '#F5F0E1', // accent-beige
-        marginBottom: 4,
-    },
-    profileEmail: {
-        fontSize: 12, // text-xs
-        color: 'rgba(220, 203, 181, 0.6)', // warm-sand/60
-    },
-    sectionContainer: {
-        marginBottom: 24,
-    },
-    sectionTitle: {
-        fontSize: 12, // text-xs
-        fontWeight: '600',
-        color: 'rgba(220, 203, 181, 0.5)', // warm-sand/50
-        textTransform: 'uppercase',
-        letterSpacing: 1.5, // tracking-widest
-        marginLeft: 4,
-        marginBottom: 8,
-    },
-    card: {
-        backgroundColor: '#4A3D35', // card-dark
-        borderRadius: 16, // rounded-2xl
-        borderWidth: 1,
-        borderColor: 'rgba(255, 255, 255, 0.05)',
-        overflow: 'hidden',
-    },
-    menuItem: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        padding: 16,
-    },
-    menuLeft: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 12,
-        flex: 1,
-    },
-    iconBox: {
-        width: 32, // w-8
-        height: 32,
-        borderRadius: 8,
-        backgroundColor: 'rgba(205, 133, 63, 0.1)', // primary/10
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
-    menuText: {
-        fontSize: 14, // text-sm
-        fontWeight: '500', // font-medium
-        color: '#F5F0E1', // accent-beige
-    },
-    subText: {
-        fontSize: 10,
-        color: 'rgba(220, 203, 181, 0.5)', // warm-sand/50
-        marginTop: 2,
-    },
-    separator: {
-        height: 1,
-        backgroundColor: 'rgba(255, 255, 255, 0.05)',
-        marginLeft: 60, // approximate indent
-    },
-    valueText: {
-        fontSize: 12,
-        color: 'rgba(220, 203, 181, 0.5)', // warm-sand/50
-    },
-    logoutButton: {
-        paddingVertical: 16,
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    logoutText: {
-        fontSize: 14,
-        fontWeight: 'bold',
-        color: 'rgba(220, 203, 181, 0.4)', // warm-sand/40
-    },
-    footer: {
-        alignItems: 'center',
-        marginBottom: 16,
-    },
-    footerText: {
-        fontSize: 10,
-        color: 'rgba(220, 203, 181, 0.3)', // warm-sand/30
-    },
-    // Map Modal Styles
-    centerPinContainer: {
-        position: 'absolute',
-        top: '50%',
-        left: '50%',
-        marginLeft: -20, // half of size
-        marginTop: -40, // height
-        zIndex: 10,
-    },
-    mapTopControls: {
-        position: 'absolute',
-        top: 20,
-        left: 20,
-        right: 20,
-        flexDirection: 'row',
-        justifyContent: 'space-between',
-        zIndex: 10,
-    },
-    closeMapButton: {
-        width: 44,
-        height: 44,
-        backgroundColor: '#F5F0E1',
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    locateButton: {
-        width: 44,
-        height: 44,
-        backgroundColor: '#F5F0E1',
-        borderRadius: 22,
-        alignItems: 'center',
-        justifyContent: 'center',
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: 2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    mapBottomCard: {
-        position: 'absolute',
-        bottom: 0,
-        left: 0,
-        right: 0,
-        backgroundColor: '#3E322A',
-        borderTopLeftRadius: 24,
-        borderTopRightRadius: 24,
-        padding: 24,
-        shadowColor: "#000",
-        shadowOffset: { width: 0, height: -2 },
-        shadowOpacity: 0.25,
-        shadowRadius: 3.84,
-        elevation: 5,
-    },
-    dragHandle: {
-        width: 40,
-        height: 4,
-        backgroundColor: 'rgba(255,255,255,0.1)',
-        alignSelf: 'center',
-        borderRadius: 2,
-        marginBottom: 16,
-    },
-    mapLabel: {
-        fontSize: 12,
-        color: '#CD853F',
-        fontWeight: 'bold',
-        marginBottom: 8,
-    },
-    addressContainer: {
-        backgroundColor: '#4A3D35',
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 16,
-        minHeight: 60,
-        justifyContent: 'center',
-    },
-    addressText: {
-        color: '#F5F0E1',
-        fontSize: 14,
-        lineHeight: 20,
-    },
-    confirmLocationButton: {
-        backgroundColor: '#CD853F',
-        paddingVertical: 16,
-        borderRadius: 12,
-        alignItems: 'center',
-    },
-    confirmLocationText: {
-        color: '#F5F0E1',
-        fontWeight: 'bold',
-        fontSize: 16,
-    },
-});
