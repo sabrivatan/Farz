@@ -1,13 +1,19 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch, Image, Modal, TextInput, Platform } from 'react-native';
+import { View, Text, ScrollView, TouchableOpacity, Switch, Image, Modal, TextInput, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { 
     ChevronLeft, ChevronRight, Bell, Globe, 
-    CloudUpload, Trash2, Info, Shield, Edit, LogOut, X, Clock, Camera
+    CloudUpload, Trash2, Info, Shield, Edit, LogOut, X, Clock, Camera, User
 } from 'lucide-react-native';
 import { getDb } from '@/db';
 import DateTimePicker from '@react-native-community/datetimepicker';
+import { format } from 'date-fns';
+import { tr } from 'date-fns/locale';
+import * as ImagePicker from 'expo-image-picker';
+import { supabase } from '@/lib/supabase';
+import { Session } from '@supabase/supabase-js';
+import { SyncService } from '@/services/SyncService';
 
 const PRAYER_TIMES = [
     { key: 'fajr', label: 'Sabah' },
@@ -19,9 +25,12 @@ const PRAYER_TIMES = [
 
 export default function SettingsScreen() {
     const router = useRouter();
+    const params = useLocalSearchParams();
     const [profile, setProfile] = useState<any>(null);
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
-    
+    const [session, setSession] = useState<Session | null>(null);
+    const [isBackingUp, setIsBackingUp] = useState(false);
+
     // Profile Edit Modal
     const [profileModalVisible, setProfileModalVisible] = useState(false);
     const [editedProfile, setEditedProfile] = useState({
@@ -52,16 +61,42 @@ export default function SettingsScreen() {
         isha: true,
     });
 
+    const handlePickImage = async () => {
+        // No permissions request is necessary for launching the image library
+        let result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            allowsEditing: true,
+            aspect: [1, 1],
+            quality: 0.5,
+        });
+
+        if (!result.canceled) {
+            setEditedProfile(prev => ({ ...prev, profileImage: result.assets[0].uri }));
+        }
+    };
+
     useFocusEffect(
         useCallback(() => {
             fetchProfile();
-        }, [])
+            supabase.auth.getSession().then(({ data: { session } }) => {
+                setSession(session);
+            });
+
+            // Check for navigation params to open modals
+            if (params.action === 'openPrayerReminders') {
+                setPrayerReminderModalVisible(true);
+                router.setParams({ action: '' }); // Clear param
+            }
+        }, [params.action])
     );
+
+
 
     const fetchProfile = async () => {
         try {
             const db = getDb();
             const result: any = await db.getFirstAsync('SELECT * FROM profile LIMIT 1');
+            console.log('Fetched profile:', result); // Debug log
             setProfile(result);
             if (result) {
                 setEditedProfile({
@@ -82,20 +117,54 @@ export default function SettingsScreen() {
     const handleSaveProfile = async () => {
         try {
             const db = getDb();
-            await db.runAsync(
-                `UPDATE profile SET 
-                    name = ?, 
-                    surname = ?, 
-                    email = ?,
-                    birth_date = ?, 
-                    gender = ?, 
-                    bulugh_date = ?,
-                    profile_image = ?
-                WHERE id = 1`,
-                [editedProfile.name, editedProfile.surname, editedProfile.email, editedProfile.birthDate, editedProfile.gender, editedProfile.bulughDate, editedProfile.profileImage]
-            );
+            console.log('Saving profile:', editedProfile); // Debug log
+            
+            // Check if profile exists
+            const existing: any = await db.getFirstAsync('SELECT id FROM profile LIMIT 1');
+            
+            if (existing) {
+                await db.runAsync(
+                    `UPDATE profile SET 
+                        name = ?, 
+                        surname = ?, 
+                        email = ?,
+                        birth_date = ?, 
+                        gender = ?, 
+                        bulugh_date = ?,
+                        profile_image = ?
+                    WHERE id = ?`,
+                    [
+                        editedProfile.name, 
+                        editedProfile.surname, 
+                        editedProfile.email, 
+                        editedProfile.birthDate, 
+                        editedProfile.gender, 
+                        editedProfile.bulughDate, 
+                        editedProfile.profileImage,
+                        existing.id
+                    ]
+                );
+            } else {
+                // Should not happen if onboarding created it, but safe fallback
+                await db.runAsync(
+                    `INSERT INTO profile (name, surname, email, birth_date, gender, bulugh_date, profile_image) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    [
+                        editedProfile.name, 
+                        editedProfile.surname, 
+                        editedProfile.email, 
+                        editedProfile.birthDate, 
+                        editedProfile.gender, 
+                        editedProfile.bulughDate, 
+                        editedProfile.profileImage
+                    ]
+                );
+            }
+            
             await fetchProfile();
             setProfileModalVisible(false);
+            // Auto-sync profile changes
+            SyncService.backupData();
         } catch (error) {
             console.error('Error saving profile:', error);
         }
@@ -111,23 +180,78 @@ export default function SettingsScreen() {
         });
     };
 
+    const handleBackup = async () => {
+        setIsBackingUp(true);
+        const success = await SyncService.backupData();
+        setIsBackingUp(false);
+        if (success) {
+            alert('Yedekleme Başarılı!');
+        }
+    };
+
     const isAnyPrayerReminderEnabled = Object.values(prayerReminders).some(v => v);
 
     const handleResetData = () => {
-        // TODO: Implement reset data functionality
-        console.log('Reset data');
+        Alert.alert(
+            'Verileri Sıfırla',
+            'Tüm yerel verileriniz (ibadet kayıtları, ayarlar) silinecek. Yedeklenmemiş veriler kaybolur. Emin misiniz?',
+            [
+                { text: 'Vazgeç', style: 'cancel' },
+                { 
+                    text: 'Sıfırla', 
+                    style: 'destructive', 
+                    onPress: async () => {
+                        try {
+                            const db = getDb();
+                            await db.runAsync('DELETE FROM daily_status');
+                            await db.runAsync('DELETE FROM debt_counts');
+                            await db.runAsync('DELETE FROM logs');
+                            // We might keep the profile but reset stats? Or delete profile too?
+                            // Usually "Reset Data" implies wiping user progress.
+                            // Let's reset debts and status.
+                            await db.runAsync('UPDATE debt_counts SET count = 0'); // Actually delete rows or reset?
+                            // Re-init default debts
+                            await db.runAsync('DELETE FROM debt_counts');
+                            const types = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'witr', 'fasting'];
+                            for (const type of types) {
+                                await db.runAsync('INSERT INTO debt_counts (type, count) VALUES (?, 0)', [type]);
+                            }
+                            
+                            // Clear profile last_processed_date to trigger recalc if needed, or just leave it.
+                            alert('Veriler sıfırlandı.');
+                            // Reload profile/stats
+                            fetchProfile();
+                        } catch (e) {
+                            console.error(e);
+                            alert('Hata oluştu.');
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     const handleLogout = async () => {
-        try {
-            const db = getDb();
-            // Clear profile data
-            await db.runAsync('DELETE FROM profile');
-            // Navigate to onboarding
-            router.replace('/onboarding');
-        } catch (error) {
-            console.error('Logout error:', error);
-        }
+        Alert.alert(
+            'Oturumu Kapat',
+            'Çıkış yapmak istediğinize emin misiniz? Yerel verileriniz silinmez.',
+            [
+                { text: 'Vazgeç', style: 'cancel' },
+                {
+                    text: 'Çıkış Yap',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                             await supabase.auth.signOut();
+                             setSession(null);
+                             router.replace('/(tabs)/settings');
+                        } catch (error) {
+                             console.error('Logout error:', error);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     return (
@@ -161,13 +285,94 @@ export default function SettingsScreen() {
                                 <Edit size={14} color="#FFFFFF" />
                             </TouchableOpacity>
                         </View>
+
                         <View className="items-center">
                             <Text className="text-xl font-bold text-beige">
                                 {profile?.name ? `${profile.name} ${profile.surname || ''}`.trim() : 'Profil Bilgisi Yok'}
                             </Text>
                             <Text className="text-xs text-beige/60">
-                                {profile?.birth_date || 'Doğum tarihi girilmemiş'}
+                                {profile?.birth_date 
+                                    ? `${profile.gender === 'male' ? 'Erkek' : 'Kadın'} - ${format(new Date(profile.birth_date), 'd MMMM yyyy', { locale: tr })}`
+                                    : 'Profil bilgisi eksik'}
                             </Text>
+                        </View>
+                    </View>
+
+                    {/* HESAP VE VERİ Section */}
+                    <View className="mb-8">
+                        <Text className="text-xs font-semibold text-beige uppercase tracking-widest px-1 mb-2">
+                            HESAP VE VERİ
+                        </Text>
+                        <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
+                            
+                            {/* Auth Status / Backup */}
+                            {session ? (
+                                <View className="p-4 bg-primary/10 mb-1 border-b border-white/5">
+                                    <View className="flex-row items-center justify-between">
+                                        <View className="flex-row items-center gap-3">
+                                            <Shield size={20} color="#CD853F" />
+                                            <View>
+                                                <Text className="text-beige font-semibold">Verileriniz Güvende ✅</Text>
+                                                <Text className="text-xs text-beige/60">{session.user.email}</Text>
+                                            </View>
+                                        </View>
+                                        <TouchableOpacity 
+                                            onPress={handleBackup}
+                                            disabled={isBackingUp}
+                                            className="bg-primary/20 px-3 py-1.5 rounded-lg"
+                                        >
+                                            <Text className="text-xs font-medium text-primary">
+                                                {isBackingUp ? 'Yedekleniyor...' : 'Şimdi Yedekle'}
+                                            </Text>
+                                        </TouchableOpacity>
+                                    </View>
+                                </View>
+                            ) : (
+                                <TouchableOpacity 
+                                    onPress={() => router.push('/auth/login')}
+                                    className="p-4 bg-orange-500/10 mb-1 border-b border-white/5"
+                                >
+                                    <View className="flex-row items-center gap-3">
+                                        <CloudUpload size={20} color="#F97316" />
+                                        <View>
+                                            <Text className="text-orange-400 font-semibold">Verileri Yedekle</Text>
+                                            <Text className="text-xs text-orange-300/80">Üye ol, verilerin kaybolmasın.</Text>
+                                        </View>
+                                        <ChevronRight size={16} color="#F97316" className="ml-auto" />
+                                    </View>
+                                </TouchableOpacity>
+                            )}
+
+                            {/* Kişisel Bilgiler */}
+                            <TouchableOpacity 
+                                onPress={() => setProfileModalVisible(true)}
+                                className="flex-row items-center justify-between p-4 border-b border-white/5"
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
+                                        <User size={20} color="#CD853F" />
+                                    </View>
+                                    <Text className="text-sm font-medium text-beige">Kişisel Bilgiler</Text>
+                                </View>
+                                <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
+                            </TouchableOpacity>
+
+                            {/* Verileri Sıfırla (Existing) */
+                              /* Moving Reset Data here as well if not already present or remove duplicates later */
+                            }
+                             <TouchableOpacity 
+                                onPress={handleResetData}
+                                className="flex-row items-center justify-between p-4"
+                            >
+                                <View className="flex-row items-center gap-3">
+                                    <View className="w-8 h-8 rounded-lg bg-red-500/10 items-center justify-center">
+                                        <Trash2 size={20} color="#EF4444" />
+                                    </View>
+                                    <Text className="text-sm font-medium text-red-400">Verileri Sıfırla</Text>
+                                </View>
+                                <ChevronRight size={20} color="rgba(239, 68, 68, 0.3)" />
+                            </TouchableOpacity>
+
                         </View>
                     </View>
 
@@ -229,38 +434,7 @@ export default function SettingsScreen() {
                         </View>
                     </View>
 
-                    {/* HESAP VE VERİ Section */}
-                    <View className="mb-8">
-                        <Text className="text-xs font-semibold text-beige uppercase tracking-widest px-1 mb-2">
-                            HESAP VE VERİ
-                        </Text>
-                        <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
-                            {/* Verileri Yedekle */}
-                            <TouchableOpacity className="flex-row items-center justify-between p-4 border-b border-white/5">
-                                <View className="flex-row items-center gap-3">
-                                    <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
-                                        <CloudUpload size={20} color="#CD853F" />
-                                    </View>
-                                    <Text className="text-sm font-medium text-beige">Verileri Yedekle</Text>
-                                </View>
-                                <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
-                            </TouchableOpacity>
 
-                            {/* Verileri Sıfırla */}
-                            <TouchableOpacity 
-                                onPress={handleResetData}
-                                className="flex-row items-center justify-between p-4"
-                            >
-                                <View className="flex-row items-center gap-3">
-                                    <View className="w-8 h-8 rounded-lg bg-red-500/10 items-center justify-center">
-                                        <Trash2 size={20} color="#EF4444" />
-                                    </View>
-                                    <Text className="text-sm font-medium text-red-400">Verileri Sıfırla</Text>
-                                </View>
-                                <ChevronRight size={20} color="rgba(239, 68, 68, 0.3)" />
-                            </TouchableOpacity>
-                        </View>
-                    </View>
 
                     {/* UYGULAMA Section */}
                     <View className="mb-8">
@@ -340,7 +514,10 @@ export default function SettingsScreen() {
                                             <Text className="text-5xl text-beige/40">👤</Text>
                                         )}
                                     </View>
-                                    <TouchableOpacity className="absolute bottom-0 right-0 bg-primary p-2 rounded-full">
+                                    <TouchableOpacity 
+                                        onPress={handlePickImage}
+                                        className="absolute bottom-0 right-0 bg-primary p-2 rounded-full"
+                                    >
                                         <Camera size={14} color="#FFFFFF" />
                                     </TouchableOpacity>
                                 </View>
@@ -393,7 +570,7 @@ export default function SettingsScreen() {
                                     className="bg-emerald-card border border-white/10 rounded-xl p-4"
                                 >
                                     <Text className="text-beige">
-                                        {editedProfile.birthDate || 'Tarih seçin'}
+                                        {editedProfile.birthDate ? format(new Date(editedProfile.birthDate), 'd MMMM yyyy', { locale: tr }) : 'Tarih seçin'}
                                     </Text>
                                 </TouchableOpacity>
                                 {showBirthDatePicker && (
@@ -450,7 +627,7 @@ export default function SettingsScreen() {
                                     className="bg-emerald-card border border-white/10 rounded-xl p-4"
                                 >
                                     <Text className="text-beige">
-                                        {editedProfile.bulughDate || 'Tarih seçin'}
+                                        {editedProfile.bulughDate ? format(new Date(editedProfile.bulughDate), 'd MMMM yyyy', { locale: tr }) : 'Tarih seçin'}
                                     </Text>
                                 </TouchableOpacity>
                                 {showBulughDatePicker && (

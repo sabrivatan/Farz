@@ -1,9 +1,10 @@
-import { View, Text, ScrollView, TouchableOpacity, Dimensions, Image } from "react-native";
-import { useRouter } from 'expo-router';
+import { format } from 'date-fns';
+import { View, Text, ScrollView, TouchableOpacity, Dimensions, Image, Platform, Alert } from "react-native";
+import { useRouter, useFocusEffect } from 'expo-router';
+import * as Location from 'expo-location';
+import { getDebtCounts, getDb } from "@/db";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { useEffect, useState } from "react";
-// @ts-ignore
-import { getDb } from "@/db";
+import { useEffect, useState, useCallback } from "react";
 import { 
     Calendar, 
     ChevronLeft, 
@@ -26,14 +27,18 @@ import {
     MoonStar,
     BarChart2,
     CalendarDays,
-    Activity
+    Activity,
+    Info
 } from 'lucide-react-native';
 import { CalculationMethod, PrayerTimes, Coordinates } from 'adhan';
 import Svg, { Path } from 'react-native-svg';
+import { SyncService } from '@/services/SyncService';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 type PrayerKey = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
+
+import CustomAlert from '@/components/CustomAlert';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -44,8 +49,19 @@ export default function Dashboard() {
   const [dailyStatus, setDailyStatus] = useState<{ [key: string]: 'completed' | 'missed' | null }>({});
   const [timeRemaining, setTimeRemaining] = useState<string>('--:--:--');
   const [nextWriter, setNextWriter] = useState<string>('');
-  const [debts, setDebts] = useState<any>({ fajr: 0, fasting: 0 }); 
-  
+  const [coords, setCoords] = useState<{ latitude: number, longitude: number } | null>(null);
+  const [debts, setDebts] = useState<{ totalPrayer: number, fasting: number }>({ totalPrayer: 0, fasting: 0 }); 
+  const [locationName, setLocationName] = useState('İstanbul'); 
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Custom Alert State
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertConfig, setAlertConfig] = useState<{
+      type: 'success' | 'danger' | 'info' | 'warning';
+      title: string;
+      message: string;
+  }>({ type: 'info', title: '', message: '' });
+
   const prayers: { key: PrayerKey; label: string }[] = [
     { key: 'fajr', label: 'Sabah' },
     { key: 'dhuhr', label: 'Öğle' },
@@ -54,7 +70,7 @@ export default function Dashboard() {
     { key: 'isha', label: 'Yatsı' },
   ];
 
-  // Icons Helper
+  // Helper Functions
   const getIcon = (index: number, size: number, color: string) => {
       switch(index) {
           case 0: return <Sunrise size={size} color={color} />;
@@ -66,52 +82,11 @@ export default function Dashboard() {
       }
   };
 
-  useEffect(() => {
-    calculatePrayerTimes();
-    fetchDailyStatus();
-    fetchDebts();
-    const timer = setInterval(() => { if (prayerTimes) updateCountdown(prayerTimes); }, 1000);
-    return () => clearInterval(timer);
-  }, []);
-
-  useEffect(() => {
-    if (prayerTimes) updateCountdown(prayerTimes);
-  }, [prayerTimes]);
-
-  const fetchDebts = async () => {
-      try {
-          const db = getDb();
-          const result: any[] = await db.getAllAsync('SELECT * FROM debt_counts');
-          const newDebts: any = { fajr: 0, fasting: 0 }; 
-          let totalPrayer = 0;
-          result.forEach((row: any) => {
-              if (row.type === 'fasting') newDebts.fasting = row.count;
-              else totalPrayer += row.count;
-          });
-          newDebts.totalPrayer = totalPrayer;
-          setDebts(newDebts);
-      } catch (e) { console.error(e); }
+  const getFormatTime = (prayerTime: Date) => {
+      const hours = prayerTime.getHours().toString().padStart(2, '0');
+      const minutes = prayerTime.getMinutes().toString().padStart(2, '0');
+      return `${hours}:${minutes}`;
   }
-
-  const fetchDailyStatus = async () => {
-    try {
-        const db = getDb();
-        const today = new Date().toISOString().split('T')[0];
-        const result: any[] = await db.getAllAsync('SELECT * FROM daily_status WHERE date = ?', [today]);
-        const statusMap: any = {};
-        result.forEach((row: any) => statusMap[row.type] = row.status);
-        setDailyStatus(statusMap);
-    } catch (e) { console.error(e); }
-  };
-
-  const calculatePrayerTimes = () => {
-    const coordinates = new Coordinates(41.0082, 28.9784);
-    const params = CalculationMethod.Turkey();
-    const date = new Date();
-    const times = new PrayerTimes(coordinates, date, params);
-    setPrayerTimes(times);
-    updateCurrentIndex(times);
-  };
 
   const updateCurrentIndex = (times: PrayerTimes) => {
     const now = new Date();
@@ -126,8 +101,34 @@ export default function Dashboard() {
     setCurrentPrayerIndex(index);
   }
 
+  const calculatePrayerTimes = (coordinates?: { latitude: number, longitude: number }) => {
+    const latitude = coordinates ? coordinates.latitude : 41.0082;
+    const longitude = coordinates ? coordinates.longitude : 28.9784;
+    
+    if (coordinates) {
+        setCoords(coordinates);
+    }
+    
+    const adhanCoordinates = new Coordinates(latitude, longitude);
+    const params = CalculationMethod.Turkey();
+    const date = new Date();
+    const times = new PrayerTimes(adhanCoordinates, date, params);
+    setPrayerTimes(times);
+    updateCurrentIndex(times);
+    updateCountdown(times); // Initial update
+  };
+ 
   const updateCountdown = (times: PrayerTimes) => {
     const now = new Date();
+    
+    // Check if day changed and times are stale
+    if (times.fajr.getDate() !== now.getDate()) {
+        if (coords) {
+            calculatePrayerTimes(coords);
+            return; 
+        }
+    }
+
     let nextPrayerTime: Date | null = null;
     let nextPrayerName = '';
 
@@ -139,7 +140,7 @@ export default function Dashboard() {
     else {
         const nextDay = new Date(now);
         nextDay.setDate(now.getDate() + 1);
-        const coordinates = new Coordinates(41.0082, 28.9784);
+        const coordinates = times.coordinates;
         const params = CalculationMethod.Turkey();
         const nextTimes = new PrayerTimes(coordinates, nextDay, params);
         nextPrayerTime = nextTimes.fajr;
@@ -155,21 +156,101 @@ export default function Dashboard() {
         setNextWriter(nextPrayerName);
     }
   };
-  
-  const getFormatTime = (prayerTime: Date) => {
-      const hours = prayerTime.getHours().toString().padStart(2, '0');
-      const minutes = prayerTime.getMinutes().toString().padStart(2, '0');
-      return `${hours}:${minutes}`;
-  }
 
-  const handlePrayerAction = async (prayerKey: string, action: 'completed' | 'missed') => {
+  const loadDebts = async () => {
+      try {
+          const { syncDebts } = require('@/db');
+          await syncDebts(); 
+          const counts = await getDebtCounts();
+          setDebts({ totalPrayer: counts.prayerDebt, fasting: counts.fastingDebt });
+      } catch (e) {
+          console.error('Error loading debts:', e);
+      }
+  };
+
+  const fetchDailyStatus = async () => {
     try {
         const db = getDb();
-        const today = new Date().toISOString().split('T')[0];
-        setDailyStatus(prev => ({ ...prev, [prayerKey]: action }));
-        await db.runAsync('INSERT OR REPLACE INTO daily_status (date, type, status) VALUES (?, ?, ?)', [today, prayerKey, action]);
+        const today = format(new Date(), 'yyyy-MM-dd');
+        const result: any[] = await db.getAllAsync('SELECT * FROM daily_status WHERE date = ?', [today]);
+        const statusMap: any = {};
+        result.forEach((row: any) => statusMap[row.type] = row.status);
+        setDailyStatus(statusMap);
     } catch (e) { console.error(e); }
   };
+
+  const handlePrayerAction = async (prayerKey: string, action: 'completed' | 'missed' | 'pending') => {
+    try {
+        const db = getDb();
+        const { toggleDailyStatus } = require('@/db');
+        const today = format(new Date(), 'yyyy-MM-dd');
+        
+        setDailyStatus(prev => {
+            const newState = { ...prev };
+            if (action === 'pending') {
+                delete newState[prayerKey];
+            } else {
+                newState[prayerKey] = action;
+            }
+            return newState;
+        });
+
+        await toggleDailyStatus(today, prayerKey, action);
+        SyncService.backupData();
+    } catch (e) { console.error(e); }
+  };
+
+  const showDebtInfo = () => {
+        setAlertConfig({
+            type: 'info',
+            title: 'Borç Hesaplaması',
+            message: `Bu sayı (${debts.totalPrayer}), profilinizde belirttiğiniz 'Buluğ Çağı' tarihinden bugüne kadar olan toplam namaz yükümlülüğünüzden, kıldığınız namazların düşülmesiyle hesaplanmıştır.\n\nFormül: (Geçen Gün x 5) - Kılınanlar\n\nNot: Bu sayıyı Profil > Kişisel Bilgiler ekranından düzenleyebilirsiniz.`
+        });
+        setAlertVisible(true);
+  };
+
+  // Effects
+  useFocusEffect(
+      useCallback(() => {
+          loadDebts();
+          fetchDailyStatus();
+      }, [])
+  );
+
+  useEffect(() => {
+      (async () => {
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          if (status !== 'granted') {
+              setErrorMsg('Konum izni reddedildi');
+              calculatePrayerTimes();
+              return;
+          }
+
+          try {
+            let location = await Location.getCurrentPositionAsync({});
+            try {
+                let reverseGeocode = await Location.reverseGeocodeAsync({
+                    latitude: location.coords.latitude,
+                    longitude: location.coords.longitude
+                });
+                if (reverseGeocode && reverseGeocode.length > 0) {
+                    const city = reverseGeocode[0].city || reverseGeocode[0].subregion || 'Konum';
+                    setLocationName(city);
+                }
+            } catch (e) { console.log('Reverse geocode error', e); }
+            
+            calculatePrayerTimes(location.coords);
+          } catch (e) {
+              console.error("Location error:", e);
+              calculatePrayerTimes();
+          }
+      })();
+  }, []);
+
+  useEffect(() => {
+    const timer = setInterval(() => { if (prayerTimes) updateCountdown(prayerTimes); }, 1000);
+    return () => clearInterval(timer);
+  }, [prayerTimes, coords]);
 
   const currentPrayerKey = prayers[currentPrayerIndex].key;
   const isCompleted = dailyStatus[currentPrayerKey] === 'completed';
@@ -180,25 +261,26 @@ export default function Dashboard() {
   return (
     <View className="flex-1 bg-background-light dark:bg-slate-900">
         {/* HEADER SECTION (Curved) */}
-        <View className="bg-emerald-deep pt-6 pb-24 relative z-10">
-            {/* Top Bar */}
-            <View className="px-6 flex-row justify-between items-center mb-6">
-                <View>
-                    <Text className="text-emerald-100/70 font-medium text-xs tracking-widest uppercase">
-                        {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' })}
-                    </Text>
-                    <View className="flex-row items-center gap-1 mt-1">
-                        <MapPin size={14} color="#D2691E" />
-                        <Text className="text-white font-bold text-sm">İstanbul</Text>
+        <View className="bg-emerald-deep pb-24 relative z-10">
+            <SafeAreaView edges={['top']}>
+                {/* Top Bar */}
+                <View className="px-6 flex-row justify-between items-center mb-6 pt-2">
+                    <View>
+                        <Text className="text-emerald-100/70 font-medium text-xs tracking-widest uppercase">
+                            {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', weekday: 'long' })}
+                        </Text>
+                        <View className="flex-row items-center gap-1 mt-1">
+                            <MapPin size={14} color="#D2691E" />
+                            <Text className="text-white font-bold text-sm">{locationName}</Text>
+                        </View>
                     </View>
+                    <TouchableOpacity className="bg-white/10 p-2 rounded-full">
+                        <Bell size={20} color="white" />
+                    </TouchableOpacity>
                 </View>
-                <TouchableOpacity className="bg-white/10 p-2 rounded-full">
-                    <Bell size={20} color="white" />
-                </TouchableOpacity>
-            </View>
 
-            {/* Time Display */}
-            <View className="items-center justify-center mb-6">
+                {/* Time Display */}
+                <View className="items-center justify-center mb-6">
                 <View className="flex-row items-center gap-2 mb-1">
                      <Moon size={20} color="#D2691E" />
                      <Text className="text-emerald-100/90 font-medium text-lg">{nextWriter} Vaktine</Text>
@@ -245,8 +327,9 @@ export default function Dashboard() {
                         </View>
                     );
                 })}
-            </View>
-
+                </View>
+            </SafeAreaView>
+            
             {/* CURVED SVG BOTTOM */}
             <View style={{ position: 'absolute', bottom: -24, left: 0, right: 0, zIndex: -1 }}>
                 <Svg height="50" width={SCREEN_WIDTH} viewBox={`0 0 ${SCREEN_WIDTH} 50`}>
@@ -315,81 +398,84 @@ export default function Dashboard() {
                         <Text className="text-[10px] font-semibold text-slate-600">Kıble</Text>
                     </TouchableOpacity>
                     
-
-
-                    <TouchableOpacity className="items-center gap-2">
+                    <TouchableOpacity 
+                        className="items-center gap-2"
+                        onPress={() => router.push({ pathname: '/(tabs)/settings', params: { action: 'openPrayerReminders' } })}
+                    >
                          <View className="w-14 h-14 rounded-2xl bg-white border border-slate-100 items-center justify-center shadow-sm">
-                            <CalendarDays size={24} color="#D2691E" />
+                            <Bell size={24} color="#D2691E" />
                         </View>
-                        <Text className="text-[10px] font-semibold text-slate-600">Takvim</Text>
+                        <Text className="text-[10px] font-semibold text-slate-600">Vakit Uyarısı</Text>
                     </TouchableOpacity>
                 </ScrollView>
             </View>
 
-            {/* ACTION CARD & PROGRESS SUMMARY */}
-            <View className="px-6 flex-1 justify-end">
-                 <View className="bg-emerald-deep p-6 rounded-3xl relative overflow-hidden mb-4 min-h-[200px] justify-between">
-                    {/* Background Pattern fake */}
-                    <View className="absolute inset-0 opacity-10" style={{ backgroundColor: '#000' }} />
-                    
-                    <View>
-                        <Text className="text-emerald-200 text-xs font-medium mb-1">Vaktin geçmeden</Text>
-                        <Text className="text-white text-2xl font-bold mb-4">{prayers[currentPrayerIndex]?.label} Namazı</Text>
+            {/* DAILY OVERVIEW (Replaces Action Card) */}
+            <View className="px-6 mb-8 mt-4">
+                 <View className="bg-emerald-deep/80 p-5 rounded-[2rem] border border-white/5 shadow-xl backdrop-blur-md">
+                    <View className="flex-row items-center justify-between mb-6">
+                         <View className="flex-row items-center gap-3">
+                             <View className="w-10 h-10 bg-primary-terracotta rounded-full items-center justify-center shadow-md">
+                                 <Text className="text-beige font-bold text-base">{new Date().getDate()}</Text>
+                             </View>
+                             <Text className="text-beige font-bold text-lg tracking-tight">Bugünün İbadetleri</Text>
+                         </View>
+                         {/* Info Icon and Debt Info for Debt Calculation */}
+                         {debts.totalPrayer > 0 && (
+                            <TouchableOpacity 
+                                onPress={showDebtInfo}
+                                className="flex-row items-center gap-2 bg-white/10 pl-3 pr-2 py-1.5 rounded-full border border-white/5"
+                            >
+                                <Text className="text-[10px] text-emerald-100 font-bold">Borç: {debts.totalPrayer}</Text>
+                                <View className="bg-emerald-deep/50 p-1 rounded-full">
+                                     <Info size={10} color="#A7F3D0" />
+                                </View>
+                            </TouchableOpacity>
+                         )}
                     </View>
 
-                    <View className="flex-row gap-3 mb-6 items-end self-end w-full">
-                        <TouchableOpacity
-                            onPress={() => handlePrayerAction(currentPrayerKey, 'completed')}
-                            activeOpacity={0.8}
-                            disabled={isCompleted}
-                            className={`flex-1 py-3 px-4 rounded-xl flex-row items-center justify-center gap-2 shadow-lg shadow-black/20 ${
-                                isCompleted ? 'bg-primary' : 'bg-primary'
-                            }`}
-                        >
-                            <Check size={18} color="white" strokeWidth={3} />
-                            <Text className="text-white font-bold text-sm">Kıldım</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity
-                            onPress={() => handlePrayerAction(currentPrayerKey, 'missed')}
-                            activeOpacity={0.8}
-                            disabled={isMissed}
-                            className={`flex-1 py-3 px-4 rounded-xl flex-row items-center justify-center gap-2 border ${
-                                isMissed ? 'bg-white/10 border-white/20' : 'bg-transparent border-white/20'
-                            }`}
-                        >
-                            <X size={18} color="white" strokeWidth={3} />
-                            <Text className="text-white font-bold text-sm">Kılmadım</Text>
-                        </TouchableOpacity>
+                    <View className="flex-row justify-between gap-2">
+                        {prayers.map((prayer, index) => {
+                            const isCompleted = dailyStatus[prayer.key] === 'completed';
+                            const isActiveTime = currentPrayerIndex === index;
+                            
+                            return (
+                                <View key={prayer.key} className="flex-col items-center gap-2 flex-1">
+                                    <Text className={`text-[10px] font-bold ${isActiveTime ? 'text-primary-terracotta' : 'text-beige/50'}`}>
+                                        {prayer.label}
+                                    </Text>
+                                    
+                                    <TouchableOpacity 
+                                        onPress={() => handlePrayerAction(prayer.key, isCompleted ? 'pending' : 'completed')}
+                                        activeOpacity={0.7}
+                                        className={`w-full aspect-square rounded-2xl items-center justify-center border shadow-sm ${
+                                            isCompleted 
+                                                ? 'bg-primary-terracotta border-primary-terracotta' 
+                                                : isActiveTime 
+                                                    ? 'bg-emerald-deep/60 border-primary-terracotta/50' 
+                                                    : 'bg-emerald-deep/40 border-white/5'
+                                        }`}
+                                    >
+                                        {isCompleted && <Check size={24} color="#F5F0E1" strokeWidth={3} />}
+                                        {!isCompleted && isActiveTime && (
+                                            <View className="w-2 h-2 rounded-full bg-primary-terracotta animate-pulse" />
+                                        )}
+                                    </TouchableOpacity>
+                                </View>
+                            );
+                        })}
                     </View>
-
-                    {/* Horizontal Progress Bars (Within Card) */}
-                    <View className="border-t border-white/10 pt-4">
-                        <View className="mb-3">
-                            <View className="flex-row justify-between mb-1">
-                                <Text className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">Namaz Borcu</Text>
-                                <Text className="text-[10px] font-bold text-white">{debts.totalPrayer || 0}</Text>
-                            </View>
-                            <View className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                <View style={{ width: '45%' }} className="h-full bg-primary rounded-full" />
-                            </View>
-                        </View>
-                        
-                        <View>
-                            <View className="flex-row justify-between mb-1">
-                                <Text className="text-[10px] font-bold text-emerald-200 uppercase tracking-wider">Oruç Borcu</Text>
-                                <Text className="text-[10px] font-bold text-white">{debts.fasting || 0}</Text>
-                            </View>
-                            <View className="h-1.5 bg-white/10 rounded-full overflow-hidden">
-                                <View style={{ width: '20%' }} className="h-full bg-emerald-400 rounded-full" /> 
-                            </View>
-                        </View>
-                    </View>
-
                  </View>
             </View>
 
         </ScrollView>
+        <CustomAlert
+            visible={alertVisible}
+            type={alertConfig.type}
+            title={alertConfig.title}
+            message={alertConfig.message}
+            onConfirm={() => setAlertVisible(false)}
+        />
     </View>
   );
 }

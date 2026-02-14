@@ -1,17 +1,18 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, TextInput, Switch } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useRouter, useFocusEffect } from 'expo-router';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, getYear, setYear, isFuture } from 'date-fns';
 import { tr } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Check, Minus, Plus, Calendar, RotateCcw, Info, Utensils, Award, MoonStar } from 'lucide-react-native';
 import { getDailyStatus, toggleDailyStatus, getMonthlyStats, initDB, quickUpdateKaza } from '../../db';
+import { SyncService } from '@/services/SyncService';
 import CustomAlert from '../../components/CustomAlert';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DAY_SIZE = (SCREEN_WIDTH - 60) / 7;
 
-type PrayerKey = 'morning' | 'noon' | 'afternoon' | 'evening' | 'night' | 'fasting' | 'kefaret_fasting';
+type PrayerKey = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha' | 'fasting' | 'kefaret_fasting';
 
 interface PrayerType {
     key: PrayerKey;
@@ -19,11 +20,11 @@ interface PrayerType {
 }
 
 const PRAYER_TYPES: PrayerType[] = [
-    { key: 'morning', label: 'Sabah' },
-    { key: 'noon', label: 'Öğle' },
-    { key: 'afternoon', label: 'İkindi' },
-    { key: 'evening', label: 'Akşam' },
-    { key: 'night', label: 'Yatsı' },
+    { key: 'fajr', label: 'Sabah' },
+    { key: 'dhuhr', label: 'Öğle' },
+    { key: 'asr', label: 'İkindi' },
+    { key: 'maghrib', label: 'Akşam' },
+    { key: 'isha', label: 'Yatsı' },
 ];
 
 interface DailyStatus {
@@ -69,11 +70,13 @@ export default function HistoryScreen() {
     const currentYear = getYear(new Date());
     const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
 
-    useEffect(() => {
-        initDB();
-        fetchMonthData();
-        fetchSessionCounts();
-    }, [viewDate, activeTab]); // Re-fetch when tab changes to ensure correct count display
+    useFocusEffect(
+        React.useCallback(() => {
+            initDB();
+            fetchMonthData();
+            fetchSessionCounts();
+        }, [viewDate, activeTab])
+    );
 
     // Fetch session counts for quick entry
     const fetchSessionCounts = async () => {
@@ -152,22 +155,62 @@ export default function HistoryScreen() {
 
     const handleSave = async () => {
         try {
-            // Process unsaved changes
+            // 1. Process Calendar Changes (Daily Status)
             for (const [key, value] of unsavedChanges) {
-                // Check if it's a note update
-                if (key.endsWith('-note')) {
-                     // Note saving logic would go here if we were implementing it fully in DB
-                     continue;
-                }
+                if (key.endsWith('-note')) continue; // Skip notes for now
 
-                const [dateStr, type] = key.split(/-(.+)/); // Split only on first hyphen
+                const lastHyphenIndex = key.lastIndexOf('-');
+                const dateStr = key.substring(0, lastHyphenIndex);
+                const type = key.substring(lastHyphenIndex + 1);
                 await toggleDailyStatus(dateStr, type, value ? 'completed' : 'pending');
             }
+            
+            // 2. Process Quick Entry (Kaza Debts)
+            const debtUpdates = Object.entries(sessionCounts).filter(([_, count]) => count !== 0);
+            if (debtUpdates.length > 0) {
+                for (const [type, count] of debtUpdates) {
+                    await quickUpdateKaza(type, -count); // Negative count means adding debt (UI: - button adds debt)
+                    // Wait, UI:
+                    // Minus button (-1) -> sessionCounts decreases.
+                    // Plus button (+1) -> sessionCounts increases.
+                    // Logic:
+                    // If user clicks "-", they are adding a missed prayer (Debt increases).
+                    // If user clicks "+", they are performing a kaza (Debt decreases).
+                    
+                    // Let's re-read UI text: 
+                    // "Hızlı giriş ile borç ekleyebilir (-) veya yanlış girişleri düzeltebilirsiniz (+)."
+                    // "Örnek: 5 gün borç eklemek için -5, 5 gün tamamladıysanız +5 girin."
+                    
+                    // DB `debt_counts` stores positive integer for debt.
+                    // If UI is -5 (Debt increased), we need to ADD 5 to DB count.
+                    // If UI is +5 (Debt decreased/Paid), we need to SUBTRACT 5 from DB count.
+                    
+                    // So `quickUpdateKaza` takes (type, amount).
+                    // amount is added to current count.
+                    // If UI is -5 -> We want query: count = count + 5. So pass +5.
+                    // If UI is +5 -> We want query: count = count - 5. So pass -5.
+                    
+                    // So we pass: -count.
+                    // Example: UI = -5. Pass -(-5) = +5. DB adds 5. Correct.
+                    // Example: UI = +5. Pass -(5) = -5. DB subtracts 5. Correct.
+                }
+            }
+
+            // Sync after all changes
+            SyncService.backupData();
+
+            // Reset state
             setUnsavedChanges(new Map());
+            setSessionCounts(prev => {
+                const reset: SessionCounts = {};
+                Object.keys(prev).forEach(k => reset[k] = 0);
+                return reset;
+            });
+
             setAlertConfig({
                 type: 'success',
                 title: 'Başarılı',
-                message: 'Değişiklikler kaydedildi'
+                message: 'Değişiklikler ve kaza borçları kaydedildi'
             });
             setAlertVisible(true);
         } catch (e) {
@@ -298,9 +341,8 @@ export default function HistoryScreen() {
     };
 
     return (
-        <>
         <View className="flex-1 bg-emerald-deep">
-            <View className="flex-1">
+            <SafeAreaView className="flex-1" edges={['top']}>
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-4 py-4 bg-emerald-deep/95 border-b border-white/10">
                     <View className="flex-row items-center gap-4">
@@ -521,29 +563,31 @@ export default function HistoryScreen() {
                         </View>
                     </View>
 
-                    {/* Info Card */}
                     <View className="px-4 pb-12">
-                        <View className="bg-primary-terracotta/20 rounded-2xl p-5 border border-primary-terracotta/30 flex-row gap-4 items-start">
+                        <View className="bg-primary-terracotta/20 rounded-2xl p-5 border border-primary-terracotta/30 flex-row gap-4 items-start mb-6">
                             <Info size={20} color="#CD853F" style={{ marginTop: 4 }} />
                             <Text className="text-xs leading-relaxed text-beige/90 flex-1">
                                 Hızlı giriş ile borç ekleyebilir (-) veya yanlış girişleri düzeltebilirsiniz (+). Örnek: 5 gün borç eklemek için -5, 5 gün tamamladıysanız +5 girin.
                             </Text>
                         </View>
+                        
+                        <Text className="text-xs text-beige/40 text-center leading-relaxed px-4">
+                            Not: Buluğ çağı başlangıç tarihinizi ve diğer hesaplama parametrelerini Profil → Kişisel Bilgiler ekranından düzenleyebilirsiniz.
+                        </Text>
                     </View>
 
                 </ScrollView>
-            </View>
+                
+                {/* Custom Alert */}
+                <CustomAlert
+                    visible={alertVisible}
+                    type={alertConfig.type}
+                    title={alertConfig.title}
+                    message={alertConfig.message}
+                    onConfirm={() => setAlertVisible(false)}
+                />
+            </SafeAreaView>
         </View>
-
-        {/* Custom Alert */}
-        <CustomAlert
-            visible={alertVisible}
-            type={alertConfig.type}
-            title={alertConfig.title}
-            message={alertConfig.message}
-            onConfirm={() => setAlertVisible(false)}
-        />
-        </>
     );
 }
 

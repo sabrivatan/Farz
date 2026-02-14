@@ -1,7 +1,13 @@
 import { Tabs } from "expo-router";
 import { Home, Calendar, BarChart2, User } from "lucide-react-native";
+import { useEffect } from "react";
+import { checkDailyLoop } from "@/db";
 
 export default function TabLayout() {
+  useEffect(() => {
+    checkDailyLoop();
+  }, []);
+
   return (
     <Tabs
       screenOptions={{
@@ -62,6 +68,20 @@ export default function TabLayout() {
         name="log"
         options={{
           href: null,
+        }}
+      />
+      <Tabs.Screen
+        name="qibla"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' }, // Hide tab bar on qibla screen if possible
+        }}
+      />
+       <Tabs.Screen
+        name="zikir"
+        options={{
+          href: null,
+          tabBarStyle: { display: 'none' },
         }}
       />
     </Tabs>

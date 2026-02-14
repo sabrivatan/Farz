@@ -78,21 +78,72 @@ export default function CalculationForm() {
     }
 
     try {
-      // TODO: Database operations will be implemented later
-      // For now, just navigate to the main app to test UI flow
-      console.log('Calculation data:', {
+      if (!gender || !birthDate || !bulughDate || !prayerStartDate || !fastingStartDate) {
+        return;
+      }
+
+      const db = getDb();
+      
+      // 1. Calculate Debt Days
+      // Prayer debt: Days between Bulugh and Regular Prayer Start
+      // Fasting debt: Days between Bulugh and Fasting Start (approx 30 days/year)
+      
+      const oneDay = 24 * 60 * 60 * 1000;
+      
+      // Prayer Debt
+      let prayerDebtDays = 0;
+      if (prayerStartDate > bulughDate) {
+        prayerDebtDays = Math.round((prayerStartDate.getTime() - bulughDate.getTime()) / oneDay);
+      }
+      if (prayerDebtDays < 0) prayerDebtDays = 0;
+
+      // Fasting Debt (Approximate: 30 days per year difference)
+      let fastingDebtDays = 0;
+      if (fastingStartDate > bulughDate) {
+        const diffTime = Math.abs(fastingStartDate.getTime() - bulughDate.getTime());
+        const diffYears = diffTime / (oneDay * 365.25);
+        fastingDebtDays = Math.floor(diffYears * 30);
+      }
+
+      console.log('Calculated Debt:', { prayerDebtDays, fastingDebtDays });
+
+      // 2. Save Profile
+      await db.runAsync(`
+        INSERT OR REPLACE INTO profile (id, gender, birth_date, bulugh_date, regular_start_date, fasting_start_date)
+        VALUES (1, ?, ?, ?, ?, ?)
+      `, [
         gender,
-        birthDate: birthDate.toISOString(),
-        bulughDate: bulughDate.toISOString(),
-        prayerStartDate: prayerStartDate.toISOString(),
-        fastingStartDate: fastingStartDate.toISOString(),
-      });
+        birthDate.toISOString(),
+        bulughDate.toISOString(),
+        prayerStartDate.toISOString(),
+        fastingStartDate.toISOString()
+      ]);
+
+      // 3. Save Debt Counts
+      // Reset existing counts first (optional, but safer for re-run)
+      await db.runAsync('DELETE FROM debt_counts');
+      
+      const prayerTypes = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'witr'];
+      
+      for (const type of prayerTypes) {
+        await db.runAsync(
+          'INSERT INTO debt_counts (type, count) VALUES (?, ?)',
+          [type, prayerDebtDays]
+        );
+      }
+
+      // Fasting
+      await db.runAsync(
+        'INSERT INTO debt_counts (type, count) VALUES (?, ?)',
+        ['fasting', fastingDebtDays]
+      );
 
       // Navigate to main app
       router.replace("/(tabs)");
       
     } catch (e) {
       console.error("Calculation Error:", e);
+      alert("Bir hata oluştu: " + e);
     }
   };
 
