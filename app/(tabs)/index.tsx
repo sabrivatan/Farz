@@ -53,6 +53,7 @@ export default function Dashboard() {
   const [debts, setDebts] = useState<{ totalPrayer: number, fasting: number }>({ totalPrayer: 0, fasting: 0 }); 
   const [locationName, setLocationName] = useState('İstanbul'); 
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [effDate, setEffDate] = useState<Date>(new Date());
 
   // Custom Alert State
   const [alertVisible, setAlertVisible] = useState(false);
@@ -101,6 +102,17 @@ export default function Dashboard() {
     setCurrentPrayerIndex(index);
   }
 
+  const fetchDailyStatus = async (date: Date) => {
+    try {
+        const db = getDb();
+        const dateStr = format(date, 'yyyy-MM-dd'); // Use passed date
+        const result: any[] = await db.getAllAsync('SELECT * FROM daily_status WHERE date = ?', [dateStr]);
+        const statusMap: any = {};
+        result.forEach((row: any) => statusMap[row.type] = row.status);
+        setDailyStatus(statusMap);
+    } catch (e) { console.error(e); }
+  };
+
   const calculatePrayerTimes = (coordinates?: { latitude: number, longitude: number }) => {
     const latitude = coordinates ? coordinates.latitude : 41.0082;
     const longitude = coordinates ? coordinates.longitude : 28.9784;
@@ -111,19 +123,41 @@ export default function Dashboard() {
     
     const adhanCoordinates = new Coordinates(latitude, longitude);
     const params = CalculationMethod.Turkey();
-    const date = new Date();
-    const times = new PrayerTimes(adhanCoordinates, date, params);
+    
+    // Determine Effective Date
+    // If now < Today's Fajr, then effective date is Yesterday
+    const now = new Date();
+    let tempTimes = new PrayerTimes(adhanCoordinates, now, params);
+    
+    let effectiveDate = now;
+    if (now < tempTimes.fajr) {
+        effectiveDate = new Date(now);
+        effectiveDate.setDate(now.getDate() - 1);
+    }
+
+    setEffDate(effectiveDate); // Store effective date
+
+    const times = new PrayerTimes(adhanCoordinates, effectiveDate, params);
     setPrayerTimes(times);
     updateCurrentIndex(times);
     updateCountdown(times); // Initial update
+    fetchDailyStatus(effectiveDate); // Fetch status for effective date
   };
  
   const updateCountdown = (times: PrayerTimes) => {
     const now = new Date();
     
-    // Check if day changed and times are stale
-    if (times.fajr.getDate() !== now.getDate()) {
-        if (coords) {
+    // Check if we need to shift day (e.g. passed Fajr of effective day + 1)
+    // If our effective date is T, and now > T+1 Fajr, we should recalculate
+    const nextDay = new Date(times.date);
+    nextDay.setDate(times.date.getDate() + 1);
+    
+    // Re-calc next day fajr to check boundary
+    const params = CalculationMethod.Turkey();
+    const nextTimes = new PrayerTimes(times.coordinates, nextDay, params);
+
+    if (now >= nextTimes.fajr) {
+         if (coords) {
             calculatePrayerTimes(coords);
             return; 
         }
@@ -138,11 +172,7 @@ export default function Dashboard() {
     else if (now < times.maghrib) { nextPrayerTime = times.maghrib; nextPrayerName = 'Akşam'; }
     else if (now < times.isha) { nextPrayerTime = times.isha; nextPrayerName = 'Yatsı'; }
     else {
-        const nextDay = new Date(now);
-        nextDay.setDate(now.getDate() + 1);
-        const coordinates = times.coordinates;
-        const params = CalculationMethod.Turkey();
-        const nextTimes = new PrayerTimes(coordinates, nextDay, params);
+        // Next is Fajr of tomorrow (relative to effective date)
         nextPrayerTime = nextTimes.fajr;
         nextPrayerName = 'Sabah';
     }
@@ -168,22 +198,11 @@ export default function Dashboard() {
       }
   };
 
-  const fetchDailyStatus = async () => {
-    try {
-        const db = getDb();
-        const today = format(new Date(), 'yyyy-MM-dd');
-        const result: any[] = await db.getAllAsync('SELECT * FROM daily_status WHERE date = ?', [today]);
-        const statusMap: any = {};
-        result.forEach((row: any) => statusMap[row.type] = row.status);
-        setDailyStatus(statusMap);
-    } catch (e) { console.error(e); }
-  };
-
   const handlePrayerAction = async (prayerKey: string, action: 'completed' | 'missed' | 'pending') => {
     try {
         const db = getDb();
         const { toggleDailyStatus } = require('@/db');
-        const today = format(new Date(), 'yyyy-MM-dd');
+        const dateStr = format(effDate, 'yyyy-MM-dd'); // Use effective date
         
         setDailyStatus(prev => {
             const newState = { ...prev };
@@ -195,7 +214,7 @@ export default function Dashboard() {
             return newState;
         });
 
-        await toggleDailyStatus(today, prayerKey, action);
+        await toggleDailyStatus(dateStr, prayerKey, action);
         SyncService.backupData();
     } catch (e) { console.error(e); }
   };
@@ -213,8 +232,8 @@ export default function Dashboard() {
   useFocusEffect(
       useCallback(() => {
           loadDebts();
-          fetchDailyStatus();
-      }, [])
+          fetchDailyStatus(effDate);
+      }, [effDate])
   );
 
   useEffect(() => {
@@ -351,12 +370,12 @@ export default function Dashboard() {
         </View>
 
         {/* BODY CONTENT */}
-        <ScrollView contentContainerStyle={{ paddingBottom: 100, flexGrow: 1 }} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={{ paddingBottom: 24, flexGrow: 1 }} showsVerticalScrollIndicator={false}>
             
             {/* TOOLS SECTION */}
             <View className="mb-6 mt-2">
-                <Text className="px-6 text-emerald-deep font-bold text-lg mb-4">Hızlı Erişim</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 20, gap: 16 }}>
+                <Text className="text-center text-emerald-deep font-bold text-lg mb-4">Hızlı Erişim</Text>
+                <View className="flex-row flex-wrap justify-center gap-4 px-4">
                     <TouchableOpacity 
                         className="items-center gap-2"
                         onPress={() => router.push({ pathname: '/(tabs)/history', params: { tab: 'prayer' }})}
@@ -407,7 +426,7 @@ export default function Dashboard() {
                         </View>
                         <Text className="text-[10px] font-semibold text-slate-600">Vakit Uyarısı</Text>
                     </TouchableOpacity>
-                </ScrollView>
+                </View>
             </View>
 
             {/* DAILY OVERVIEW (Replaces Action Card) */}
@@ -416,9 +435,14 @@ export default function Dashboard() {
                     <View className="flex-row items-center justify-between mb-6">
                          <View className="flex-row items-center gap-3">
                              <View className="w-10 h-10 bg-primary-terracotta rounded-full items-center justify-center shadow-md">
-                                 <Text className="text-beige font-bold text-base">{new Date().getDate()}</Text>
+                                 <Text className="text-beige font-bold text-base">{effDate.getDate()}</Text>
                              </View>
-                             <Text className="text-beige font-bold text-lg tracking-tight">Bugünün İbadetleri</Text>
+                             <View>
+                                 <Text className="text-beige font-bold text-lg tracking-tight">Bugünün İbadetleri</Text>
+                                 <Text className="text-emerald-100/60 text-xs font-medium uppercase tracking-wider">
+                                   {effDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                 </Text>
+                             </View>
                          </View>
                          {/* Info Icon and Debt Info for Debt Calculation */}
                          {debts.totalPrayer > 0 && (
