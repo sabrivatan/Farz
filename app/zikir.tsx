@@ -4,6 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { ChevronLeft, Plus, ChevronRight } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useTranslation } from 'react-i18next'; // Added
 
 // Types
 export interface Dhikr {
@@ -37,7 +38,7 @@ export const PRESET_DHIKRS: Dhikr[] = [
     id: 'allahuakbar',
     nameArabic: 'الله أكبر',
     nameTurkish: 'Allahu Ekber',
-    targetCount: 33, // While often 34 in some traditions, 33 is common in tasbih fatimah, sticking to plan but 33/33/34 is common. Let's use 33 for uniformity unless specified. Wait, plan said 34 for Allahu Akbar.
+    targetCount: 33, 
     currentCount: 0,
     isCustom: false
   },
@@ -69,6 +70,7 @@ export const PRESET_DHIKRS: Dhikr[] = [
 
 export default function ZikirList() {
     const router = useRouter();
+    const { t } = useTranslation(); // Added
     const [dhikrs, setDhikrs] = useState<Dhikr[]>(PRESET_DHIKRS);
     
     // Load counts and custom dhikrs from storage
@@ -106,7 +108,7 @@ export default function ZikirList() {
                             <ChevronLeft color="#F5F0E1" size={24} />
                         </TouchableOpacity>
                         <Text className="text-xl font-bold text-beige tracking-tight">
-                            Zikirmatik
+                            {t('zikir.title')}
                         </Text>
                     </View>
                     <TouchableOpacity 
@@ -125,7 +127,7 @@ export default function ZikirList() {
                     {/* Presets Title if we have custom ones to separate */}
                     {dhikrs.some(d => !d.isCustom) && (
                         <Text className="text-beige/60 text-xs uppercase tracking-widest mb-3 ml-1">
-                            ÖNERİLEN ZİKİRLER
+                            {t('zikir.suggested')}
                         </Text>
                     )}
 
@@ -140,14 +142,14 @@ export default function ZikirList() {
                                     {dhikr.nameArabic}
                                 </Text>
                                 <Text className="text-primary font-bold text-lg">
-                                    {dhikr.nameTurkish}
+                                    {t(`zikir.${dhikr.id}`)}
                                 </Text>
                             </View>
                             
                             <View className="flex-row items-center gap-3">
                                 <View className="items-end">
                                     <Text className="text-beige/40 text-xs uppercase tracking-wider">
-                                        HEDEF
+                                        {t('zikir.target')}
                                     </Text>
                                     <Text className="text-beige font-mono font-bold text-lg">
                                         {dhikr.targetCount}
@@ -162,7 +164,7 @@ export default function ZikirList() {
                     {dhikrs.some(d => d.isCustom) && (
                         <>
                             <Text className="text-beige/60 text-xs uppercase tracking-widest mb-3 ml-1 mt-4">
-                                ZİKİRLERİM
+                                {t('zikir.my_dhikrs')}
                             </Text>
                             {dhikrs.filter(d => d.isCustom).map((dhikr) => (
                                 <TouchableOpacity 
@@ -184,7 +186,7 @@ export default function ZikirList() {
                                     <View className="flex-row items-center gap-3">
                                         <View className="items-end">
                                             <Text className="text-beige/40 text-xs uppercase tracking-wider">
-                                                HEDEF
+                                                {t('zikir.target')}
                                             </Text>
                                             <Text className="text-beige font-mono font-bold text-lg">
                                                 {dhikr.targetCount}
@@ -204,7 +206,7 @@ export default function ZikirList() {
                     >
                         <Plus color="#CD853F" size={20} />
                         <Text className="text-beige/60 font-semibold">
-                            Yeni Zikir Ekle
+                            {t('zikir.add_new')}
                         </Text>
                     </TouchableOpacity>
                 </ScrollView>

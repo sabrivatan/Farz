@@ -7,8 +7,10 @@ import { Eye, EyeOff, ChevronLeft } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import CustomAlert from '@/components/CustomAlert';
+import { useTranslation } from 'react-i18next';
 
 export default function Login() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -45,7 +47,7 @@ export default function Login() {
     });
 
     if (error) {
-        showAlert('Giriş Başarısız', error.message, 'danger');
+        showAlert(t('auth.login_failed'), error.message, 'danger');
         setLoading(false);
     } else {
         const success = await SyncService.restoreData();
@@ -53,7 +55,7 @@ export default function Login() {
              // Optional success message, or just redirect
              router.back();
         } else {
-             showAlert('Uyarı', 'Giriş yapıldı fakat veri senkronizasyonu sırasında hata oluştu.', 'warning', () => router.back());
+             showAlert(t('common.warning'), t('auth.login_success_sync_error'), 'warning', () => router.back());
         }
     }
     setLoading(false);
@@ -70,7 +72,7 @@ export default function Login() {
             >
                 <ChevronLeft size={24} color="#F5F0E1" />
             </TouchableOpacity>
-            <Text className="text-white font-bold text-xl ml-4 tracking-wide">Giriş Yap</Text>
+            <Text className="text-white font-bold text-xl ml-4 tracking-wide">{t('auth.login_title')}</Text>
         </View>
 
         <KeyboardAvoidingView 
@@ -82,7 +84,7 @@ export default function Login() {
                 {/* Logo / Title Section */}
                 <View className="items-center mb-12">
                     <Text className="text-6xl font-black text-[#D2691E] tracking-widest">FARZ</Text>
-                    <Text className="text-[#D2691E] text-xs font-bold tracking-[0.2em] mt-1 opacity-80">İBADET TAKİP UYGULAMASI</Text>
+                    <Text className="text-[#D2691E] text-xs font-bold tracking-[0.2em] mt-1 opacity-80">{t('auth.app_subtitle')}</Text>
                 </View>
 
                 {/* Form Section */}
@@ -90,12 +92,12 @@ export default function Login() {
                     
                     {/* Email Input */}
                     <View className="mb-6">
-                        <Text className="text-[#D2691E] font-bold text-xs mb-3 uppercase tracking-wide">E-posta Adresi</Text>
+                        <Text className="text-[#D2691E] font-bold text-xs mb-3 uppercase tracking-wide">{t('auth.email_label')}</Text>
                         <View className="bg-[#1a5f4e] rounded-xl h-14 justify-center px-4 border border-[#ffffff10]">
                             <TextInput
                                 onChangeText={setEmail}
                                 value={email}
-                                placeholder="ornek@farz.com"
+                                placeholder={t('auth.email_placeholder')}
                                 placeholderTextColor="rgba(255, 255, 255, 0.4)"
                                 autoCapitalize="none"
                                 keyboardType="email-address"
@@ -107,16 +109,16 @@ export default function Login() {
                     {/* Password Input */}
                     <View className="mb-6">
                         <View className="flex-row justify-between items-center mb-3">
-                            <Text className="text-[#D2691E] font-bold text-xs uppercase tracking-wide">Şifre</Text>
+                            <Text className="text-[#D2691E] font-bold text-xs uppercase tracking-wide">{t('auth.password_label')}</Text>
                             <TouchableOpacity onPress={() => router.push('/auth/forgot-password')}>
-                                <Text className="text-white/60 text-xs">Şifremi Unuttum?</Text>
+                                <Text className="text-white/60 text-xs">{t('auth.forgot_password')}</Text>
                             </TouchableOpacity>
                         </View>
                         <View className="bg-[#1a5f4e] rounded-xl h-14 flex-row items-center px-4 border border-[#ffffff10]">
                              <TextInput
                                 onChangeText={setPassword}
                                 value={password}
-                                placeholder="••••••••"
+                                placeholder={t('auth.password_placeholder')}
                                 placeholderTextColor="rgba(255, 255, 255, 0.4)"
                                 secureTextEntry={!showPassword}
                                 autoCapitalize="none"
@@ -137,15 +139,15 @@ export default function Login() {
                         {loading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text className="text-white font-bold text-lg">Giriş Yap</Text>
+                            <Text className="text-white font-bold text-lg">{t('auth.login_button')}</Text>
                         )}
                     </TouchableOpacity>
 
                     {/* Footer - Moved inside Form */}
                     <View className="flex-row justify-center pt-6">
-                        <Text className="text-white/60 text-sm">Henüz hesabın yok mu? </Text>
+                        <Text className="text-white/60 text-sm">{t('auth.no_account')} </Text>
                         <TouchableOpacity onPress={() => router.push('/auth/signup')}>
-                            <Text className="text-[#D2691E] font-bold text-sm">Kayıt Ol</Text>
+                            <Text className="text-[#D2691E] font-bold text-sm">{t('auth.register_link')}</Text>
                         </TouchableOpacity>
                     </View>
 

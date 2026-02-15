@@ -6,6 +6,7 @@ import { ChevronLeft, Navigation } from 'lucide-react-native';
 import Svg, { Circle, Line, Path, G, Text as SvgText } from 'react-native-svg';
 import * as Location from 'expo-location';
 import { DeviceMotion } from 'expo-sensors';
+import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COMPASS_SIZE = SCREEN_WIDTH * 0.75;
@@ -16,11 +17,12 @@ const KAABA_LON = 39.8262;
 
 export default function QiblaFinder() {
     const router = useRouter();
+    const { t } = useTranslation();
     const [heading, setHeading] = useState(0);
     const [qiblaDirection, setQiblaDirection] = useState(0);
     const [location, setLocation] = useState<{ latitude: number; longitude: number } | null>(null);
     const [distance, setDistance] = useState<number | null>(null);
-    const [locationName, setLocationName] = useState('Konum alınıyor...');
+    const [locationName, setLocationName] = useState(t('qibla.getting_location'));
     const [permissionGranted, setPermissionGranted] = useState(false);
     
     // Animation for pulsing Qibla marker
@@ -54,7 +56,7 @@ export default function QiblaFinder() {
                 getLocation();
                 startCompass();
             } else {
-                setLocationName('Konum izni gerekli');
+                setLocationName(t('qibla.permission_required'));
             }
         } catch (error) {
             console.error('Permission error:', error);
@@ -79,11 +81,11 @@ export default function QiblaFinder() {
             const geocode = await Location.reverseGeocodeAsync({ latitude, longitude });
             if (geocode.length > 0) {
                 const place = geocode[0];
-                setLocationName(`${place.city || place.district || place.region || 'Bilinmeyen Konum'}`);
+                setLocationName(`${place.city || place.district || place.region || t('qibla.unknown_location')}`);
             }
         } catch (error) {
             console.error('Location error:', error);
-            setLocationName('Konum alınamadı');
+            setLocationName(t('qibla.location_error'));
         }
     };
 
@@ -166,11 +168,11 @@ export default function QiblaFinder() {
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-4 py-4 border-b border-white/10">
                     <View className="flex-row items-center gap-4">
-                        <TouchableOpacity onPress={router.back} className="p-2 -ml-2">
+                        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2">
                             <ChevronLeft color="#F5F0E1" size={24} />
                         </TouchableOpacity>
                         <Text className="text-xl font-bold text-beige tracking-tight">
-                            Kıble Yönü
+                            {t('qibla.title')}
                         </Text>
                     </View>
                 </View>
@@ -179,7 +181,7 @@ export default function QiblaFinder() {
                     {/* Location Info */}
                     <View className="items-center mb-6">
                         <Text className="text-beige/60 text-sm uppercase tracking-widest mb-2">
-                            KONUMUNUZ
+                            {t('qibla.your_location')}
                         </Text>
                         <Text className="text-beige text-xl font-bold">
                             {locationName}
@@ -195,16 +197,16 @@ export default function QiblaFinder() {
                     {isAligned ? (
                         <View className="bg-emerald-card px-6 py-3 rounded-2xl border-2 border-primary mb-4">
                             <Text className="text-primary text-lg font-bold text-center">
-                                ✓ Kıble Yönündesiniz
+                                {t('qibla.aligned')}
                             </Text>
                         </View>
                     ) : (
                         <View className="bg-emerald-card px-6 py-3 rounded-2xl border border-white/10 mb-4">
                             <Text className="text-beige/80 text-base text-center font-semibold">
-                                🕋 işaretini ↑ yukarıdaki çizgiye getirin
+                                {t('qibla.align_instruction')}
                             </Text>
                             <Text className="text-beige/60 text-xs text-center mt-1">
-                                {turnDirection === 'right' ? 'Sağa dönün →' : '← Sola dönün'}
+                                {turnDirection === 'right' ? t('qibla.turn_right') : t('qibla.turn_left')}
                             </Text>
                         </View>
                     )}
@@ -347,12 +349,12 @@ export default function QiblaFinder() {
                             <View className="flex-row items-center gap-2 mb-2">
                                 <Navigation size={18} color="#CD853F" />
                                 <Text className="text-primary text-sm font-bold uppercase tracking-widest">
-                                    Nasıl Kullanılır
+                                    {t('qibla.how_to_use')}
                                 </Text>
                             </View>
                             <Text className="text-beige/90 text-sm leading-relaxed">
-                                <Text className="font-semibold text-primary">Kalibrasyon:</Text> Telefonunuzu havada 8 şeklinde çevirin.{"\n\n"}
-                                <Text className="font-semibold text-primary">Kullanım:</Text> Cihazınızı düz tutun ve talimatlara göre sağa/sola çevirin. Kabe işareti yukarıdaki sarı çizgiye geldiğinde yeşil olacaktır. Emin olmak için konumda birkaç saniye bekleyin.
+                                <Text className="font-semibold text-primary">{t('qibla.calibration')}</Text> {t('qibla.calibration_text')}{"\n\n"}
+                                <Text className="font-semibold text-primary">{t('qibla.usage')}</Text> {t('qibla.usage_text')}
                             </Text>
                         </View>
                     </View>

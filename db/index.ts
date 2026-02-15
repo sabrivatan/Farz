@@ -336,15 +336,18 @@ export const getDebtCounts = async () => {
     let prayerDebt = 0;
     let fastingDebt = 0;
     
+    const breakdown: Record<string, number> = {};
+    
     result.forEach(row => {
         if (row.type === 'fasting') {
             fastingDebt = row.count;
         } else {
             prayerDebt += row.count;
+            breakdown[row.type] = row.count;
         }
     });
     
-    return { prayerDebt, fastingDebt };
+    return { prayerDebt, fastingDebt, breakdown };
 };
 
 export const checkDailyLoop = async () => {
@@ -377,7 +380,7 @@ export const checkDailyLoop = async () => {
         // We only add debt for PASSED days. Today is still active.
         let loopDate = addDays(last, 1);
         
-        const prayerTypes = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'witr'];
+        const prayerTypes = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
         let daysMissed = 0;
         
         while (loopDate < current) { // strictly less than today

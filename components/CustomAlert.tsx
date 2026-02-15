@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, Modal, TouchableOpacity, StyleSheet, Dimensions } from 'react-native';
 import { CheckCircle2, XCircle, Info, AlertTriangle } from 'lucide-react-native';
+import { useTranslation } from 'react-i18next';
 
 const { width } = Dimensions.get('window');
 
@@ -20,13 +21,16 @@ export default function CustomAlert({
     visible,
     title,
     message,
-    confirmText = 'Tamam',
-    cancelText = 'Vazgeç',
+    confirmText,
+    cancelText,
     onConfirm,
     onCancel,
     type = 'info',
     showCancel = false,
 }: CustomAlertProps) {
+    const { t } = useTranslation();
+    const finalConfirmText = confirmText || t('common.confirm'); // or 'common.ok' if you have it
+    const finalCancelText = cancelText || t('common.cancel');
     if (!visible) return null;
 
     const getIcon = () => {
@@ -87,18 +91,20 @@ export default function CustomAlert({
                                 style={[styles.button, styles.cancelButton]} 
                                 onPress={onCancel}
                             >
-                                <Text style={styles.cancelButtonText}>{cancelText}</Text>
+                                <Text style={styles.cancelButtonText}>{finalCancelText}</Text>
                             </TouchableOpacity>
                         )}
                         <TouchableOpacity 
                             style={[
                                 styles.button, 
                                 styles.confirmButton,
+                                { backgroundColor: type === 'danger' ? '#EF4444' : '#CD853F' },
+                                { shadowColor: type === 'danger' ? '#EF4444' : '#CD853F' },
                                 showCancel && { flex: 1 }
                             ]} 
                             onPress={onConfirm}
                         >
-                            <Text style={styles.confirmButtonText}>{confirmText}</Text>
+                            <Text style={styles.confirmButtonText}>{finalConfirmText}</Text>
                         </TouchableOpacity>
                     </View>
                 </View>
@@ -165,9 +171,7 @@ const styles = StyleSheet.create({
         minWidth: 100,
     },
     confirmButton: {
-        backgroundColor: '#CD853F', // primary-terracotta
         flex: 1,
-        shadowColor: '#CD853F',
         shadowOffset: { width: 0, height: 4 },
         shadowOpacity: 0.3,
         shadowRadius: 8,

@@ -1,15 +1,16 @@
 import { useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, Platform, StyleSheet } from "react-native";
+import { View, Text, TouchableOpacity, ScrollView, Platform, StyleSheet, Alert } from "react-native";
 import { useRouter } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ChevronLeft, Calculator, Calendar, Info, ArrowRight } from "lucide-react-native";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { calculateBulughDate, Gender } from "@/lib/calculations";
 import { getDb } from "@/db";
-import { calculateInitialDebtDays } from "@/lib/calculations";
+import { useTranslation } from "react-i18next"; // Added
 
 export default function CalculationForm() {
   const router = useRouter();
+  const { t, i18n } = useTranslation(); // Added
   
   // Form state
   const [gender, setGender] = useState<Gender | null>(null);
@@ -68,8 +69,8 @@ export default function CalculationForm() {
   };
 
   const formatDate = (date: Date | null) => {
-    if (!date) return "Seçiniz";
-    return date.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+    if (!date) return t('onboarding.select_date');
+    return date.toLocaleDateString(i18n.language, { day: 'numeric', month: 'long', year: 'numeric' });
   };
 
   const handleCalculate = async () => {
@@ -85,15 +86,13 @@ export default function CalculationForm() {
       const db = getDb();
       
       // 1. Calculate Debt Days
-      // Prayer debt: Days between Bulugh and Regular Prayer Start
-      // Fasting debt: Days between Bulugh and Fasting Start (approx 30 days/year)
-      
       const oneDay = 24 * 60 * 60 * 1000;
       
       // Prayer Debt
       let prayerDebtDays = 0;
       if (prayerStartDate > bulughDate) {
-        prayerDebtDays = Math.round((prayerStartDate.getTime() - bulughDate.getTime()) / oneDay);
+        // Calculate difference in days + 1 to include the start date
+        prayerDebtDays = Math.round((prayerStartDate.getTime() - bulughDate.getTime()) / oneDay) + 1;
       }
       if (prayerDebtDays < 0) prayerDebtDays = 0;
 
@@ -120,10 +119,9 @@ export default function CalculationForm() {
       ]);
 
       // 3. Save Debt Counts
-      // Reset existing counts first (optional, but safer for re-run)
       await db.runAsync('DELETE FROM debt_counts');
       
-      const prayerTypes = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'witr'];
+      const prayerTypes = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
       
       for (const type of prayerTypes) {
         await db.runAsync(
@@ -143,7 +141,7 @@ export default function CalculationForm() {
       
     } catch (e) {
       console.error("Calculation Error:", e);
-      alert("Bir hata oluştu: " + e);
+      Alert.alert(t('common.error'), e instanceof Error ? e.message : String(e));
     }
   };
 
@@ -157,8 +155,8 @@ export default function CalculationForm() {
           <ChevronLeft color="#D2691E" size={24} />
         </TouchableOpacity>
         <View>
-            <Text className="text-white text-xl font-bold">Borç Hesapla</Text>
-            <Text className="text-emerald-200/60 text-xs">Adım 1/1</Text>
+            <Text className="text-white text-xl font-bold">{t('onboarding.calculation_title')}</Text>
+            <Text className="text-emerald-200/60 text-xs">{t('onboarding.step_1')}</Text>
         </View>
       </View>
 
@@ -168,7 +166,7 @@ export default function CalculationForm() {
         <View className="bg-emerald-900/50 p-4 rounded-xl flex-row gap-3 border border-emerald-800 mb-8">
             <Info size={24} color="#D2691E" />
             <Text className="text-emerald-100 flex-1 text-sm leading-5">
-                Doğru bir hesaplama için lütfen bilgilerinizi eksiksiz girin. Bu bilgiler sadece cihazınızda saklanır.
+                {t('onboarding.info_text')}
             </Text>
         </View>
 
@@ -177,26 +175,26 @@ export default function CalculationForm() {
             
             {/* Gender */}
             <View className="mb-6">
-                <Text className="text-primary font-bold mb-3 uppercase text-xs tracking-wider">Cinsiyet</Text>
+                <Text className="text-primary font-bold mb-3 uppercase text-xs tracking-wider">{t('onboarding.gender')}</Text>
                 <View className="flex-row gap-4">
                     <TouchableOpacity 
                         onPress={() => handleGenderSelect('male')}
                         className={`flex-1 py-4 rounded-xl border-2 items-center ${gender === 'male' ? 'bg-primary border-primary' : 'bg-emerald-900 border-emerald-800'}`}
                     >
-                        <Text className={`font-bold ${gender === 'male' ? 'text-white' : 'text-emerald-200'}`}>Erkek</Text>
+                        <Text className={`font-bold ${gender === 'male' ? 'text-white' : 'text-emerald-200'}`}>{t('onboarding.male')}</Text>
                     </TouchableOpacity>
                     <TouchableOpacity 
                         onPress={() => handleGenderSelect('female')}
                         className={`flex-1 py-4 rounded-xl border-2 items-center ${gender === 'female' ? 'bg-primary border-primary' : 'bg-emerald-900 border-emerald-800'}`}
                     >
-                        <Text className={`font-bold ${gender === 'female' ? 'text-white' : 'text-emerald-200'}`}>Kadın</Text>
+                        <Text className={`font-bold ${gender === 'female' ? 'text-white' : 'text-emerald-200'}`}>{t('onboarding.female')}</Text>
                     </TouchableOpacity>
                 </View>
             </View>
 
             {/* Birth Date */}
             <View className="mb-6">
-                 <Text className="text-primary font-bold mb-3 uppercase text-xs tracking-wider">Doğum Tarihi</Text>
+                 <Text className="text-primary font-bold mb-3 uppercase text-xs tracking-wider">{t('onboarding.birth_date')}</Text>
                  <TouchableOpacity 
                     onPress={() => showPicker('birth')}
                     className="bg-emerald-900 border border-emerald-800 p-4 rounded-xl flex-row items-center justify-between"
@@ -211,9 +209,9 @@ export default function CalculationForm() {
             {/* Bulugh Date (Auto Calculated but editable) */}
             <View className="mb-6">
                  <View className="flex-row items-center justify-between mb-3">
-                    <Text className="text-primary font-bold uppercase text-xs tracking-wider">Ergenlik (Büluğ) Tarihi</Text>
+                    <Text className="text-primary font-bold uppercase text-xs tracking-wider">{t('onboarding.bulugh_date')}</Text>
                     <View className="bg-emerald-800 px-2 py-0.5 rounded">
-                        <Text className="text-[10px] text-emerald-200">Otomatik Hesaplanır</Text>
+                        <Text className="text-[10px] text-emerald-200">{t('onboarding.auto_calculated')}</Text>
                     </View>
                  </View>
                  <TouchableOpacity 
@@ -229,7 +227,7 @@ export default function CalculationForm() {
 
             {/* Namaz + Fasting Start Date */}
              <View className="mb-6">
-                 <Text className="text-primary font-bold mb-3 uppercase text-xs tracking-wider">Düzenli Namaza Başlama</Text>
+                 <Text className="text-primary font-bold mb-3 uppercase text-xs tracking-wider">{t('onboarding.prayer_start_date')}</Text>
                  <TouchableOpacity 
                     onPress={() => showPicker('prayer')}
                     className="bg-emerald-900 border border-emerald-800 p-4 rounded-xl flex-row items-center justify-between"
@@ -240,12 +238,12 @@ export default function CalculationForm() {
                     <Calendar size={20} color="#D2691E" />
                  </TouchableOpacity>
                  <Text className="text-emerald-400/60 text-[10px] mt-2 ml-1">
-                    Hiç başlamadıysanız bugünü seçebilirsiniz.
+                    {t('onboarding.start_today_hint')}
                  </Text>
             </View>
 
              <View className="mb-6">
-                 <Text className="text-primary font-bold mb-3 uppercase text-xs tracking-wider">Düzenli Oruca Başlama</Text>
+                 <Text className="text-primary font-bold mb-3 uppercase text-xs tracking-wider">{t('onboarding.fasting_start_date')}</Text>
                  <TouchableOpacity 
                     onPress={() => showPicker('fasting')}
                     className="bg-emerald-900 border border-emerald-800 p-4 rounded-xl flex-row items-center justify-between"
@@ -271,7 +269,7 @@ export default function CalculationForm() {
                 isValid ? 'bg-primary shadow-primary/25' : 'bg-emerald-800 opacity-50'
             }`}
         >
-             <Text className="text-white font-bold text-lg">Hesapla ve Başla</Text>
+             <Text className="text-white font-bold text-lg">{t('onboarding.calculate_and_start')}</Text>
              <ArrowRight color="white" size={24} />
         </TouchableOpacity>
       </View>
@@ -289,6 +287,7 @@ export default function CalculationForm() {
             display={Platform.OS === 'ios' ? 'spinner' : 'default'}
             onChange={onDateChange}
             maximumDate={new Date()}
+            locale={i18n.language}
         />
       )}
     </SafeAreaView>

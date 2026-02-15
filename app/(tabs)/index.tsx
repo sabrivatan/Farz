@@ -5,6 +5,7 @@ import * as Location from 'expo-location';
 import { getDebtCounts, getDb } from "@/db";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { useEffect, useState, useCallback } from "react";
+import { useTranslation } from 'react-i18next'; // Import useTranslation
 import { 
     Calendar, 
     ChevronLeft, 
@@ -42,13 +43,14 @@ import CustomAlert from '@/components/CustomAlert';
 
 export default function Dashboard() {
   const router = useRouter();
+  const { t } = useTranslation(); // Hook
   
   // State
   const [currentPrayerIndex, setCurrentPrayerIndex] = useState(0);
   const [prayerTimes, setPrayerTimes] = useState<PrayerTimes | null>(null);
   const [dailyStatus, setDailyStatus] = useState<{ [key: string]: 'completed' | 'missed' | null }>({});
   const [timeRemaining, setTimeRemaining] = useState<string>('--:--:--');
-  const [nextWriter, setNextWriter] = useState<string>('');
+  const [nextPrayerKey, setNextPrayerKey] = useState<string>('fajr'); // Changed to key
   const [coords, setCoords] = useState<{ latitude: number, longitude: number } | null>(null);
   const [debts, setDebts] = useState<{ totalPrayer: number, fasting: number }>({ totalPrayer: 0, fasting: 0 }); 
   const [locationName, setLocationName] = useState('İstanbul'); 
@@ -64,11 +66,11 @@ export default function Dashboard() {
   }>({ type: 'info', title: '', message: '' });
 
   const prayers: { key: PrayerKey; label: string }[] = [
-    { key: 'fajr', label: 'Sabah' },
-    { key: 'dhuhr', label: 'Öğle' },
-    { key: 'asr', label: 'İkindi' },
-    { key: 'maghrib', label: 'Akşam' },
-    { key: 'isha', label: 'Yatsı' },
+    { key: 'fajr', label: 'fajr' },
+    { key: 'dhuhr', label: 'dhuhr' },
+    { key: 'asr', label: 'asr' },
+    { key: 'maghrib', label: 'maghrib' },
+    { key: 'isha', label: 'isha' },
   ];
 
   // Helper Functions
@@ -164,17 +166,17 @@ export default function Dashboard() {
     }
 
     let nextPrayerTime: Date | null = null;
-    let nextPrayerName = '';
+    let nextKey = '';
 
-    if (now < times.fajr) { nextPrayerTime = times.fajr; nextPrayerName = 'Sabah'; }
-    else if (now < times.dhuhr) { nextPrayerTime = times.dhuhr; nextPrayerName = 'Öğle'; }
-    else if (now < times.asr) { nextPrayerTime = times.asr; nextPrayerName = 'İkindi'; }
-    else if (now < times.maghrib) { nextPrayerTime = times.maghrib; nextPrayerName = 'Akşam'; }
-    else if (now < times.isha) { nextPrayerTime = times.isha; nextPrayerName = 'Yatsı'; }
+    if (now < times.fajr) { nextPrayerTime = times.fajr; nextKey = 'fajr'; }
+    else if (now < times.dhuhr) { nextPrayerTime = times.dhuhr; nextKey = 'dhuhr'; }
+    else if (now < times.asr) { nextPrayerTime = times.asr; nextKey = 'asr'; }
+    else if (now < times.maghrib) { nextPrayerTime = times.maghrib; nextKey = 'maghrib'; }
+    else if (now < times.isha) { nextPrayerTime = times.isha; nextKey = 'isha'; }
     else {
         // Next is Fajr of tomorrow (relative to effective date)
         nextPrayerTime = nextTimes.fajr;
-        nextPrayerName = 'Sabah';
+        nextKey = 'fajr';
     }
 
     if (nextPrayerTime) {
@@ -183,7 +185,7 @@ export default function Dashboard() {
         const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
         const seconds = Math.floor((diff % (1000 * 60)) / 1000);
         setTimeRemaining(`${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`);
-        setNextWriter(nextPrayerName);
+        setNextPrayerKey(nextKey);
     }
   };
 
@@ -222,8 +224,8 @@ export default function Dashboard() {
   const showDebtInfo = () => {
         setAlertConfig({
             type: 'info',
-            title: 'Borç Hesaplaması',
-            message: `Bu sayı (${debts.totalPrayer}), profilinizde belirttiğiniz 'Buluğ Çağı' tarihinden bugüne kadar olan toplam namaz yükümlülüğünüzden, kıldığınız namazların düşülmesiyle hesaplanmıştır.\n\nFormül: (Geçen Gün x 5) - Kılınanlar\n\nNot: Bu sayıyı Profil > Kişisel Bilgiler ekranından düzenleyebilirsiniz.`
+            title: t('debt.title'),
+            message: t('debt.info_message', { total: debts.totalPrayer })
         });
         setAlertVisible(true);
   };
@@ -240,7 +242,7 @@ export default function Dashboard() {
       (async () => {
           let { status } = await Location.requestForegroundPermissionsAsync();
           if (status !== 'granted') {
-              setErrorMsg('Konum izni reddedildi');
+              setErrorMsg(t('dashboard.location_denied'));
               calculatePrayerTimes();
               return;
           }
@@ -302,12 +304,14 @@ export default function Dashboard() {
                 <View className="items-center justify-center mb-6">
                 <View className="flex-row items-center gap-2 mb-1">
                      <Moon size={20} color="#D2691E" />
-                     <Text className="text-emerald-100/90 font-medium text-lg">{nextWriter} Vaktine</Text>
+                     <Text className="text-emerald-100/90 font-medium text-lg">
+                        {t('dashboard.to_prayer', { prayer: t(`prayers.${nextPrayerKey}`) })}
+                     </Text>
                 </View>
                 
                 <Text className="text-7xl font-black text-white tracking-tighter leading-none">{timeRemaining}</Text>
                 <View className="bg-white/10 px-4 py-1.5 rounded-full mt-3 backdrop-blur-sm">
-                    <Text className="text-emerald-50 text-xs font-medium tracking-wide">Sonraki vakte kalan süre</Text>
+                    <Text className="text-emerald-50 text-xs font-medium tracking-wide">{t('dashboard.next_prayer_remaining')}</Text>
                 </View>
             </View>
 
@@ -323,7 +327,7 @@ export default function Dashboard() {
                     if (index === 0 && prayerTimes) {
                          const sunrise = prayerTimes.sunrise;
                          const sunriseStr = sunrise ? getFormatTime(sunrise) : '';
-                         subText = `Gnş: ${sunriseStr}`;
+                         subText = `${t('prayers.sunny')}: ${sunriseStr}`;
                     }
 
                     return (
@@ -337,7 +341,7 @@ export default function Dashboard() {
                             <View className="mb-1">
                                 {getIcon(index, 16, isActive ? '#FFFFFF' : '#A7F3D0')}
                             </View>
-                            <Text className={`text-[10px] font-bold mb-0.5 ${isActive ? 'text-white' : 'text-emerald-100'}`} numberOfLines={1}>{prayer.label}</Text>
+                            <Text className={`text-[10px] font-bold mb-0.5 ${isActive ? 'text-white' : 'text-emerald-100'}`} numberOfLines={1}>{t(`prayers.${prayer.key}`)}</Text>
                             <Text className={`text-[10px] ${isActive ? 'text-white' : 'text-emerald-100/80'}`}>{timeStr}</Text>
                              {subText && (
                                 <Text className="text-[8px] text-emerald-100/60 mt-0.5 -mb-1">{subText}</Text>
@@ -374,7 +378,7 @@ export default function Dashboard() {
             
             {/* TOOLS SECTION */}
             <View className="mb-6 mt-2">
-                <Text className="text-center text-emerald-deep font-bold text-lg mb-4">Hızlı Erişim</Text>
+                <Text className="text-center text-emerald-deep font-bold text-lg mb-4">{t('dashboard.quick_access')}</Text>
                 <View className="flex-row flex-wrap justify-center gap-4 px-4">
                     <TouchableOpacity 
                         className="items-center gap-2"
@@ -383,7 +387,7 @@ export default function Dashboard() {
                         <View className="w-14 h-14 rounded-2xl bg-white border border-slate-100 items-center justify-center shadow-sm">
                             <HistoryIcon size={24} color="#D2691E" />
                         </View>
-                        <Text className="text-[10px] font-semibold text-slate-600">Kaza Namazı</Text>
+                        <Text className="text-[10px] font-semibold text-slate-600">{t('dashboard.missed_prayer')}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity 
@@ -393,7 +397,7 @@ export default function Dashboard() {
                         <View className="w-14 h-14 rounded-2xl bg-white border border-slate-100 items-center justify-center shadow-sm">
                             <MoonStar size={24} color="#D2691E" />
                         </View>
-                        <Text className="text-[10px] font-semibold text-slate-600">Kaza Orucu</Text>
+                        <Text className="text-[10px] font-semibold text-slate-600">{t('dashboard.missed_fasting')}</Text>
                     </TouchableOpacity>
 
                     {/* Zikirmatik Button */}
@@ -404,7 +408,7 @@ export default function Dashboard() {
                         <View className="w-14 h-14 rounded-2xl bg-white border border-slate-100 items-center justify-center shadow-sm">
                             <Hash size={24} color="#D2691E" />
                         </View>
-                        <Text className="text-[10px] font-semibold text-slate-600">Zikirmatik</Text>
+                        <Text className="text-[10px] font-semibold text-slate-600">{t('dashboard.dhikr')}</Text>
                     </TouchableOpacity>
 
                     <TouchableOpacity 
@@ -414,7 +418,7 @@ export default function Dashboard() {
                         <View className="w-14 h-14 rounded-2xl bg-white border border-slate-100 items-center justify-center shadow-sm">
                             <Compass size={24} color="#D2691E" />
                         </View>
-                        <Text className="text-[10px] font-semibold text-slate-600">Kıble</Text>
+                        <Text className="text-[10px] font-semibold text-slate-600">{t('dashboard.qibla')}</Text>
                     </TouchableOpacity>
                     
                     <TouchableOpacity 
@@ -424,7 +428,7 @@ export default function Dashboard() {
                          <View className="w-14 h-14 rounded-2xl bg-white border border-slate-100 items-center justify-center shadow-sm">
                             <Bell size={24} color="#D2691E" />
                         </View>
-                        <Text className="text-[10px] font-semibold text-slate-600">Vakit Uyarısı</Text>
+                        <Text className="text-[10px] font-semibold text-slate-600">{t('dashboard.prayer_alert')}</Text>
                     </TouchableOpacity>
                 </View>
             </View>
@@ -438,7 +442,7 @@ export default function Dashboard() {
                                  <Text className="text-beige font-bold text-base">{effDate.getDate()}</Text>
                              </View>
                              <View>
-                                 <Text className="text-beige font-bold text-lg tracking-tight">Bugünün İbadetleri</Text>
+                                 <Text className="text-beige font-bold text-lg tracking-tight">{t('dashboard.title')}</Text>
                                  <Text className="text-emerald-100/60 text-xs font-medium uppercase tracking-wider">
                                    {effDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
                                  </Text>
@@ -450,7 +454,7 @@ export default function Dashboard() {
                                 onPress={showDebtInfo}
                                 className="flex-row items-center gap-2 bg-white/10 pl-3 pr-2 py-1.5 rounded-full border border-white/5"
                             >
-                                <Text className="text-[10px] text-emerald-100 font-bold">Borç: {debts.totalPrayer}</Text>
+                                <Text className="text-[10px] text-emerald-100 font-bold">{t('debt.debt_label', { count: debts.totalPrayer })}</Text>
                                 <View className="bg-emerald-deep/50 p-1 rounded-full">
                                      <Info size={10} color="#A7F3D0" />
                                 </View>
@@ -466,7 +470,7 @@ export default function Dashboard() {
                             return (
                                 <View key={prayer.key} className="flex-col items-center gap-2 flex-1">
                                     <Text className={`text-[10px] font-bold ${isActiveTime ? 'text-primary-terracotta' : 'text-beige/50'}`}>
-                                        {prayer.label}
+                                        {t(`prayers.${prayer.key}`)}
                                     </Text>
                                     
                                     <TouchableOpacity 

@@ -7,8 +7,10 @@ import { ChevronLeft, User, Mail, Lock, Check, Eye, EyeOff } from 'lucide-react-
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import CustomAlert from '@/components/CustomAlert';
+import { useTranslation } from 'react-i18next';
 
 export default function Signup() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
@@ -43,15 +45,15 @@ export default function Signup() {
 
   async function signUpWithEmail() {
     if (!fullName || !email || !password || !confirmPassword) {
-        showAlert('Hata', 'Lütfen tüm alanları doldurun.', 'warning');
+        showAlert(t('common.error'), t('auth.error_fill_all'), 'warning');
         return;
     }
     if (password !== confirmPassword) {
-        showAlert('Hata', 'Şifreler eşleşmiyor.', 'warning');
+        showAlert(t('common.error'), t('auth.error_passwords_match'), 'warning');
         return;
     }
     if (!termsAccepted) {
-        showAlert('Hata', 'Lütfen kullanım koşullarını kabul edin.', 'warning');
+        showAlert(t('common.error'), t('auth.error_terms'), 'warning');
         return;
     }
 
@@ -78,10 +80,10 @@ export default function Signup() {
     });
 
     if (error) {
-        showAlert('Kayıt Başarısız', error.message, 'danger');
+        showAlert(t('auth.signup_failed'), error.message, 'danger');
     } else {
         if (!session) {
-            showAlert('Kayıt Başarılı', 'Lütfen gelen kutunuzu kontrol edip email adresinizi onaylayın!', 'success');
+            showAlert(t('auth.signup_title'), t('auth.signup_success_check_email'), 'success');
         } else {
              // 1. Update Profile with Name/Surname manually (since trigger might miss metadata)
              try {
@@ -103,9 +105,9 @@ export default function Signup() {
              const success = await SyncService.backupData();
              
              if (success) {
-                 showAlert('Kayıt Başarılı', 'Hesabınız oluşturuldu ve verileriniz yedeklendi.', 'success', () => router.replace('/onboarding/calculation'));
+                 showAlert(t('auth.signup_title'), t('auth.signup_success_backup'), 'success', () => router.replace('/onboarding/calculation'));
              } else {
-                 showAlert('Uyarı', 'Hesap oluşturuldu fakat yedekleme sırasında hata oluştu.', 'warning', () => router.replace('/onboarding/calculation'));
+                 showAlert(t('common.warning'), t('auth.login_success_sync_error'), 'warning', () => router.replace('/onboarding/calculation'));
              }
         }
     }
@@ -123,7 +125,7 @@ export default function Signup() {
             >
                 <ChevronLeft size={24} color="#F5F0E1" />
             </TouchableOpacity>
-            <Text className="text-white font-bold text-xl ml-4 tracking-wide">Kayıt Ol</Text>
+            <Text className="text-white font-bold text-xl ml-4 tracking-wide">{t('auth.signup_title')}</Text>
         </View>
 
         <KeyboardAvoidingView 
@@ -141,8 +143,8 @@ export default function Signup() {
                             <View className="w-12 h-6 bg-[#D2691E] -mt-1 rounded-t-sm" />
                         </View>
                     </View>
-                    <Text className="text-3xl font-bold text-white mb-2">Yeni Hesap Oluştur</Text>
-                    <Text className="text-white/60 text-center px-4">İbadetlerinizi düzenli takip etmek için Farz'a katılın.</Text>
+                    <Text className="text-3xl font-bold text-white mb-2">{t('auth.create_account_title')}</Text>
+                    <Text className="text-white/60 text-center px-4">{t('auth.signup_subtitle')}</Text>
                 </View>
 
                 {/* Form */}
@@ -150,13 +152,13 @@ export default function Signup() {
                     
                     {/* Name Input */}
                     <View className="mb-4">
-                        <Text className="text-[#A7F3D0] font-bold text-xs mb-3 uppercase tracking-wide opacity-80">Ad Soyad</Text>
+                        <Text className="text-[#A7F3D0] font-bold text-xs mb-3 uppercase tracking-wide opacity-80">{t('auth.name_label')}</Text>
                         <View className="bg-[#065f46] rounded-xl h-14 flex-row items-center px-4 border border-[#ffffff10]">
                             <User size={18} color="#A7F3D0" className="mr-3 opacity-50" />
                             <TextInput
                                 onChangeText={setFullName}
                                 value={fullName}
-                                placeholder="Adınızı ve soyadınızı girin"
+                                placeholder={t('auth.name_placeholder')}
                                 placeholderTextColor="rgba(167, 243, 208, 0.4)"
                                 className="flex-1 text-white text-sm font-medium h-full"
                             />
@@ -165,13 +167,13 @@ export default function Signup() {
 
                     {/* Email Input */}
                     <View className="mb-4">
-                        <Text className="text-[#A7F3D0] font-bold text-xs mb-2 uppercase tracking-wide opacity-80">E-posta Adresi</Text>
+                        <Text className="text-[#A7F3D0] font-bold text-xs mb-2 uppercase tracking-wide opacity-80">{t('auth.email_label')}</Text>
                         <View className="bg-[#065f46] rounded-xl h-14 flex-row items-center px-4 border border-[#ffffff10]">
                             <Mail size={18} color="#A7F3D0" className="mr-3 opacity-50" />
                             <TextInput
                                 onChangeText={setEmail}
                                 value={email}
-                                placeholder="example@email.com"
+                                placeholder={t('auth.email_placeholder')}
                                 placeholderTextColor="rgba(167, 243, 208, 0.4)"
                                 autoCapitalize="none"
                                 keyboardType="email-address"
@@ -182,13 +184,13 @@ export default function Signup() {
 
                     {/* Password Input */}
                     <View className="mb-4">
-                        <Text className="text-[#A7F3D0] font-bold text-xs mb-2 uppercase tracking-wide opacity-80">Şifre</Text>
+                        <Text className="text-[#A7F3D0] font-bold text-xs mb-2 uppercase tracking-wide opacity-80">{t('auth.password_label')}</Text>
                         <View className="bg-[#065f46] rounded-xl h-14 flex-row items-center px-4 border border-[#ffffff10]">
                             <Lock size={18} color="#A7F3D0" className="mr-3 opacity-50" />
                             <TextInput
                                 onChangeText={setPassword}
                                 value={password}
-                                placeholder="••••••••"
+                                placeholder={t('auth.password_placeholder')}
                                 placeholderTextColor="rgba(167, 243, 208, 0.4)"
                                 secureTextEntry={!showPassword}
                                 className="flex-1 text-white text-sm font-medium h-full"
@@ -201,7 +203,7 @@ export default function Signup() {
 
                      {/* Confirm Password Input */}
                      <View className="mb-4">
-                        <Text className="text-[#A7F3D0] font-bold text-xs mb-2 uppercase tracking-wide opacity-80">Şifre Tekrar</Text>
+                        <Text className="text-[#A7F3D0] font-bold text-xs mb-2 uppercase tracking-wide opacity-80">{t('auth.password_confirm_label')}</Text>
                         <View className="bg-[#065f46] rounded-xl h-14 flex-row items-center px-4 border border-[#ffffff10]">
                             <View className="w-[18px] mr-3 items-center justify-center">
                                 <Check size={18} color={password && confirmPassword && password === confirmPassword ? "#4ade80" : "#A7F3D0"} className={password && confirmPassword && password === confirmPassword ? "" : "opacity-50"} />
@@ -209,7 +211,7 @@ export default function Signup() {
                             <TextInput
                                 onChangeText={setConfirmPassword}
                                 value={confirmPassword}
-                                placeholder="••••••••"
+                                placeholder={t('auth.password_placeholder')}
                                 placeholderTextColor="rgba(167, 243, 208, 0.4)"
                                 secureTextEntry={!showConfirmPassword}
                                 className="flex-1 text-white text-sm font-medium h-full"
@@ -229,7 +231,7 @@ export default function Signup() {
                             {termsAccepted && <Check size={14} color="white" />}
                         </View>
                         <Text className="text-white/60 text-xs flex-1">
-                            <Text className="text-[#D2691E]">Kullanım Koşullarını</Text> ve <Text className="text-[#D2691E]">Gizlilik Politikasını</Text> kabul ediyorum.
+                            <Text className="text-[#D2691E]">{t('auth.terms_conditions')}</Text> - <Text className="text-[#D2691E]">{t('auth.privacy_policy')}</Text> {t('auth.terms_base')}
                         </Text>
                     </TouchableOpacity>
 
@@ -242,7 +244,7 @@ export default function Signup() {
                         {loading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text className="text-white font-bold text-lg">Hesap Oluştur</Text>
+                            <Text className="text-white font-bold text-lg">{t('auth.signup_button')}</Text>
                         )}
                     </TouchableOpacity>
 
@@ -250,9 +252,9 @@ export default function Signup() {
 
                 {/* Footer */}
                 <View className="flex-row justify-center mt-8 pb-8">
-                    <Text className="text-white/60 text-sm">Zaten hesabın var mı? </Text>
+                    <Text className="text-white/60 text-sm">{t('auth.already_have_account')} </Text>
                     <TouchableOpacity onPress={() => router.back()}>
-                        <Text className="text-[#D2691E] font-bold text-sm">Giriş Yap</Text>
+                        <Text className="text-[#D2691E] font-bold text-sm">{t('auth.login_button')}</Text>
                     </TouchableOpacity>
                 </View>
 

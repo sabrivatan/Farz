@@ -6,12 +6,14 @@ import { ChevronLeft, RotateCw } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Haptics from 'expo-haptics';
 import { PRESET_DHIKRS, Dhikr } from '../zikir';
+import { useTranslation } from 'react-i18next'; // Added
 
 const { width } = Dimensions.get('window');
 const COUNTER_SIZE = width * 0.7;
 
 export default function ZikirCounter() {
     const router = useRouter();
+    const { t } = useTranslation(); // Added
     const { id } = useLocalSearchParams();
     const [dhikr, setDhikr] = useState<Dhikr | null>(null);
     const [count, setCount] = useState(0);
@@ -141,7 +143,7 @@ export default function ZikirCounter() {
     if (!dhikr) {
         return (
             <View className="flex-1 bg-emerald-deep items-center justify-center">
-                <Text className="text-beige">Yükleniyor...</Text>
+                <Text className="text-beige">{t('common.loading')}</Text>
             </View>
         );
     }
@@ -165,10 +167,10 @@ export default function ZikirCounter() {
                         </View>
                         
                         <Text className="text-2xl font-bold text-primary text-center mb-2">
-                            Elhamdülillah
+                            {t('zikir.completed_title')}
                         </Text>
                         <Text className="text-beige text-center text-lg mb-8">
-                            Zikir tamamlandı!
+                            {t('zikir.completed_msg')}
                         </Text>
 
                         <View className="w-full gap-3">
@@ -176,14 +178,14 @@ export default function ZikirCounter() {
                                 onPress={() => router.back()}
                                 className="bg-primary w-full py-4 rounded-xl items-center active:opacity-90"
                             >
-                                <Text className="text-white font-bold text-lg">Listeye Dön</Text>
+                                <Text className="text-white font-bold text-lg">{t('zikir.back_to_list')}</Text>
                             </TouchableOpacity>
                             
                             <TouchableOpacity 
                                 onPress={handleReset}
                                 className="bg-white/5 w-full py-4 rounded-xl items-center active:bg-white/10 border border-white/10"
                             >
-                                <Text className="text-beige/60 font-semibold">Tekrar Başla</Text>
+                                <Text className="text-beige/60 font-semibold">{t('zikir.restart')}</Text>
                             </TouchableOpacity>
                         </View>
                     </Animated.View>
@@ -209,10 +211,10 @@ export default function ZikirCounter() {
                             {dhikr.nameArabic}
                         </Text>
                         <Text className="text-primary font-bold text-xl text-center mb-1">
-                            {dhikr.nameTurkish}
+                            {dhikr.isCustom ? dhikr.nameTurkish : t(`zikir.${dhikr.id}`)}
                         </Text>
                         <Text className="text-beige/40 text-sm tracking-widest uppercase">
-                            HEDEF: {target}
+                            {t('zikir.target')}: {target}
                         </Text>
                     </View>
 
@@ -245,7 +247,7 @@ export default function ZikirCounter() {
                                     {count}
                                 </Text>
                                 <Text className="text-beige/30 text-xs mt-2 uppercase tracking-widest">
-                                    DOKUN
+                                    {t('zikir.tap')}
                                 </Text>
                             </Animated.View>
                         </TouchableOpacity>
@@ -253,7 +255,7 @@ export default function ZikirCounter() {
 
                     {/* Footer / Instructions */}
                     <Text className="text-beige/30 text-center text-xs mt-8">
-                        Sayaçı sıfırlamak için sağ üstteki butona dokunun
+                        {t('zikir.reset_instruction')}
                     </Text>
                 </View>
             </SafeAreaView>

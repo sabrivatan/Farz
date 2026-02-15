@@ -1,5 +1,5 @@
-import React, { useState, useCallback } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, Switch, Image, Modal, TextInput, Platform, Alert, I18nManager } from 'react-native';
+﻿import React, { useState, useCallback } from 'react';
+import { View, Text, ScrollView, TouchableOpacity, Switch, Image, Modal, TextInput, Platform, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
 import { 
@@ -14,22 +14,18 @@ import * as ImagePicker from 'expo-image-picker';
 import { supabase } from '@/lib/supabase';
 import { Session } from '@supabase/supabase-js';
 import { SyncService } from '@/services/SyncService';
-import { useTranslation } from 'react-i18next';
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import CustomAlert from '@/components/CustomAlert';
 
 const PRAYER_TIMES = [
     { key: 'fajr', label: 'Sabah' },
-    { key: 'dhuhr', label: 'Öğle' },
-    { key: 'asr', label: 'İkindi' },
-    { key: 'maghrib', label: 'Akşam' },
-    { key: 'isha', label: 'Yatsı' },
+    { key: 'dhuhr', label: '├û─şle' },
+    { key: 'asr', label: '─░kindi' },
+    { key: 'maghrib', label: 'Ak┼şam' },
+    { key: 'isha', label: 'Yats─▒' },
 ];
 
 export default function SettingsScreen() {
     const router = useRouter();
     const params = useLocalSearchParams();
-    const { t, i18n } = useTranslation();
     const [profile, setProfile] = useState<any>(null);
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [session, setSession] = useState<Session | null>(null);
@@ -50,9 +46,6 @@ export default function SettingsScreen() {
     // Date Pickers
     const [showBirthDatePicker, setShowBirthDatePicker] = useState(false);
     const [showBulughDatePicker, setShowBulughDatePicker] = useState(false);
-    
-    // Language Modal
-    const [languageModalVisible, setLanguageModalVisible] = useState(false);
 
     // Info Modals
     const [aboutModalVisible, setAboutModalVisible] = useState(false);
@@ -68,10 +61,6 @@ export default function SettingsScreen() {
         isha: true,
     });
 
-    // Custom Alerts
-    const [resetDataAlertVisible, setResetDataAlertVisible] = useState(false);
-    const [logoutAlertVisible, setLogoutAlertVisible] = useState(false);
-
     const handlePickImage = async () => {
         // No permissions request is necessary for launching the image library
         let result = await ImagePicker.launchImageLibraryAsync({
@@ -83,28 +72,6 @@ export default function SettingsScreen() {
 
         if (!result.canceled) {
             setEditedProfile(prev => ({ ...prev, profileImage: result.assets[0].uri }));
-        }
-    };
-
-    const changeLanguage = async (lang: string) => {
-        try {
-            const currentLang = i18n.language;
-            if (currentLang === lang) return;
-
-            await AsyncStorage.setItem('user-language', lang);
-            await i18n.changeLanguage(lang);
-
-            const isRTL = lang === 'ar';
-            if (I18nManager.isRTL !== isRTL) {
-                I18nManager.allowRTL(isRTL);
-                I18nManager.forceRTL(isRTL);
-                Alert.alert(
-                    t('common.settings'),
-                    t('settings.restart_required'),
-                );
-            }
-        } catch (error) {
-            console.error('Language change error', error);
         }
     };
 
@@ -218,57 +185,73 @@ export default function SettingsScreen() {
         const success = await SyncService.backupData();
         setIsBackingUp(false);
         if (success) {
-            alert('Yedekleme Başarılı!');
+            alert('Yedekleme Ba┼şar─▒l─▒!');
         }
     };
 
     const isAnyPrayerReminderEnabled = Object.values(prayerReminders).some(v => v);
 
     const handleResetData = () => {
-        setResetDataAlertVisible(true);
+        Alert.alert(
+            'Verileri S─▒f─▒rla',
+            'T├╝m yerel verileriniz (ibadet kay─▒tlar─▒, ayarlar) silinecek. Yedeklenmemi┼ş veriler kaybolur. Emin misiniz?',
+            [
+                { text: 'Vazge├ğ', style: 'cancel' },
+                { 
+                    text: 'S─▒f─▒rla', 
+                    style: 'destructive', 
+                    onPress: async () => {
+                        try {
+                            const db = getDb();
+                            await db.runAsync('DELETE FROM daily_status');
+                            await db.runAsync('DELETE FROM debt_counts');
+                            await db.runAsync('DELETE FROM logs');
+                            // We might keep the profile but reset stats? Or delete profile too?
+                            // Usually "Reset Data" implies wiping user progress.
+                            // Let's reset debts and status.
+                            await db.runAsync('UPDATE debt_counts SET count = 0'); // Actually delete rows or reset?
+                            // Re-init default debts
+                            await db.runAsync('DELETE FROM debt_counts');
+                            const types = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha', 'witr', 'fasting'];
+                            for (const type of types) {
+                                await db.runAsync('INSERT INTO debt_counts (type, count) VALUES (?, 0)', [type]);
+                            }
+                            
+                            // Clear profile last_processed_date to trigger recalc if needed, or just leave it.
+                            alert('Veriler s─▒f─▒rland─▒.');
+                            // Reload profile/stats
+                            fetchProfile();
+                        } catch (e) {
+                            console.error(e);
+                            alert('Hata olu┼ştu.');
+                        }
+                    }
+                }
+            ]
+        );
     };
 
-    const confirmResetData = async () => {
-        try {
-            const db = getDb();
-            // Full wipe including profile
-            await db.runAsync('DELETE FROM daily_status');
-            await db.runAsync('DELETE FROM debt_counts');
-            await db.runAsync('DELETE FROM logs');
-            await db.runAsync('DELETE FROM profile');
-            
-            setResetDataAlertVisible(false);
-            // Redirect to onboarding to start fresh
-            router.replace('/onboarding');
-        } catch (e) {
-            console.error(e);
-            alert(t('common.error_occurred'));
-            setResetDataAlertVisible(false);
-        }
-    };
-
-    const handleLogout = () => {
-        setLogoutAlertVisible(true);
-    };
-
-    const confirmLogout = async () => {
-        try {
-                await supabase.auth.signOut();
-                setSession(null);
-                
-                // Clear local data to prevent mixing with next user
-                const db = getDb();
-                await db.runAsync('DELETE FROM daily_status');
-                await db.runAsync('DELETE FROM debt_counts');
-                await db.runAsync('DELETE FROM logs');
-                await db.runAsync('DELETE FROM profile');
-
-                setLogoutAlertVisible(false);
-                router.replace('/onboarding');
-        } catch (error) {
-                console.error('Logout error:', error);
-                setLogoutAlertVisible(false);
-        }
+    const handleLogout = async () => {
+        Alert.alert(
+            'Oturumu Kapat',
+            '├ç─▒k─▒┼ş yapmak istedi─şinize emin misiniz? Yerel verileriniz silinmez.',
+            [
+                { text: 'Vazge├ğ', style: 'cancel' },
+                {
+                    text: '├ç─▒k─▒┼ş Yap',
+                    style: 'destructive',
+                    onPress: async () => {
+                        try {
+                             await supabase.auth.signOut();
+                             setSession(null);
+                             router.replace('/(tabs)/settings');
+                        } catch (error) {
+                             console.error('Logout error:', error);
+                        }
+                    }
+                }
+            ]
+        );
     };
 
     return (
@@ -280,7 +263,7 @@ export default function SettingsScreen() {
                         <ChevronLeft color="#F5F0E1" size={24} />
                     </TouchableOpacity>
                     <Text className="flex-1 text-center text-lg font-bold text-beige mr-8">
-                        {t('common.settings')}
+                        Ayarlar
                     </Text>
                 </View>
 
@@ -292,7 +275,7 @@ export default function SettingsScreen() {
                                 {profile?.profile_image ? (
                                     <Image source={{ uri: profile.profile_image }} className="w-full h-full" />
                                 ) : (
-                                    <Text className="text-5xl text-beige/40">👤</Text>
+                                    <Text className="text-5xl text-beige/40">­şæñ</Text>
                                 )}
                             </View>
                             <TouchableOpacity 
@@ -309,16 +292,16 @@ export default function SettingsScreen() {
                             </Text>
                             <Text className="text-xs text-beige/60">
                                 {profile?.birth_date 
-                                    ? `${profile.gender === 'male' ? 'Erkek' : 'Kadın'} - ${format(new Date(profile.birth_date), 'd MMMM yyyy', { locale: tr })}`
+                                    ? `${profile.gender === 'male' ? 'Erkek' : 'Kad─▒n'} - ${format(new Date(profile.birth_date), 'd MMMM yyyy', { locale: tr })}`
                                     : 'Profil bilgisi eksik'}
                             </Text>
                         </View>
                     </View>
 
-                    {/* HESAP VE VERİ Section */}
+                    {/* HESAP VE VER─░ Section */}
                     <View className="mb-8">
                         <Text className="text-xs font-semibold text-beige uppercase tracking-widest px-1 mb-2">
-                            {t('settings.account')}
+                            HESAP VE VER─░
                         </Text>
                         <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
                             
@@ -329,7 +312,7 @@ export default function SettingsScreen() {
                                         <View className="flex-row items-center gap-3">
                                             <Shield size={20} color="#CD853F" />
                                             <View>
-                                                <Text className="text-beige font-semibold">{t('settings.data_safe')}</Text>
+                                                <Text className="text-beige font-semibold">Verileriniz G├╝vende Ô£à</Text>
                                                 <Text className="text-xs text-beige/60">{session.user.email}</Text>
                                             </View>
                                         </View>
@@ -339,7 +322,7 @@ export default function SettingsScreen() {
                                             className="bg-primary/20 px-3 py-1.5 rounded-lg"
                                         >
                                             <Text className="text-xs font-medium text-primary">
-                                                {isBackingUp ? t('settings.backing_up') : t('settings.backup_now')}
+                                                {isBackingUp ? 'Yedekleniyor...' : '┼Şimdi Yedekle'}
                                             </Text>
                                         </TouchableOpacity>
                                     </View>
@@ -352,15 +335,15 @@ export default function SettingsScreen() {
                                     <View className="flex-row items-center gap-3">
                                         <CloudUpload size={20} color="#F97316" />
                                         <View>
-                                            <Text className="text-orange-400 font-semibold">{t('settings.backup')}</Text>
-                                            <Text className="text-xs text-orange-300/80">{t('settings.signup_suggestion')}</Text>
+                                            <Text className="text-orange-400 font-semibold">Verileri Yedekle</Text>
+                                            <Text className="text-xs text-orange-300/80">├£ye ol, verilerin kaybolmas─▒n.</Text>
                                         </View>
                                         <ChevronRight size={16} color="#F97316" className="ml-auto" />
                                     </View>
                                 </TouchableOpacity>
                             )}
 
-                            {/* Kişisel Bilgiler */}
+                            {/* Ki┼şisel Bilgiler */}
                             <TouchableOpacity 
                                 onPress={() => setProfileModalVisible(true)}
                                 className="flex-row items-center justify-between p-4 border-b border-white/5"
@@ -369,12 +352,12 @@ export default function SettingsScreen() {
                                     <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
                                         <User size={20} color="#CD853F" />
                                     </View>
-                                    <Text className="text-sm font-medium text-beige">{t('settings.personal_info')}</Text>
+                                    <Text className="text-sm font-medium text-beige">Ki┼şisel Bilgiler</Text>
                                 </View>
                                 <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
                             </TouchableOpacity>
 
-                            {/* Verileri Sıfırla (Existing) */
+                            {/* Verileri S─▒f─▒rla (Existing) */
                               /* Moving Reset Data here as well if not already present or remove duplicates later */
                             }
                              <TouchableOpacity 
@@ -385,7 +368,7 @@ export default function SettingsScreen() {
                                     <View className="w-8 h-8 rounded-lg bg-red-500/10 items-center justify-center">
                                         <Trash2 size={20} color="#EF4444" />
                                     </View>
-                                    <Text className="text-sm font-medium text-red-400">{t('settings.reset_data')}</Text>
+                                    <Text className="text-sm font-medium text-red-400">Verileri S─▒f─▒rla</Text>
                                 </View>
                                 <ChevronRight size={20} color="rgba(239, 68, 68, 0.3)" />
                             </TouchableOpacity>
@@ -396,7 +379,7 @@ export default function SettingsScreen() {
                     {/* GENEL Section */}
                     <View className="mb-8">
                         <Text className="text-xs font-semibold text-beige uppercase tracking-widest px-1 mb-2">
-                            {t('settings.general')}
+                            GENEL
                         </Text>
                         <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
                             {/* Bildirimler */}
@@ -405,7 +388,7 @@ export default function SettingsScreen() {
                                     <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
                                         <Bell size={20} color="#CD853F" />
                                     </View>
-                                    <Text className="text-sm font-medium text-beige">{t('settings.notifications')}</Text>
+                                    <Text className="text-sm font-medium text-beige">Bildirimler</Text>
                                 </View>
                                 <Switch
                                     value={notificationsEnabled}
@@ -416,7 +399,7 @@ export default function SettingsScreen() {
                                 />
                             </View>
 
-                            {/* Vakit Hatırlatıcı */}
+                            {/* Vakit Hat─▒rlat─▒c─▒ */}
                             <TouchableOpacity 
                                 onPress={() => setPrayerReminderModalVisible(true)}
                                 className="flex-row items-center justify-between p-4 border-b border-white/5"
@@ -425,31 +408,26 @@ export default function SettingsScreen() {
                                     <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
                                         <Clock size={20} color="#CD853F" />
                                     </View>
-                                    <Text className="text-sm font-medium text-beige">{t('settings.prayer_reminder')}</Text>
+                                    <Text className="text-sm font-medium text-beige">Vakit Hat─▒rlat─▒c─▒</Text>
                                 </View>
                                 <View className="flex-row items-center gap-1">
                                     <Text className="text-xs text-beige/50">
-                                        {isAnyPrayerReminderEnabled ? t('settings.active') : t('settings.inactive')}
+                                        {isAnyPrayerReminderEnabled ? 'Aktif' : 'Kapal─▒'}
                                     </Text>
                                     <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
                                 </View>
                             </TouchableOpacity>
 
                             {/* Dil */}
-                            <TouchableOpacity 
-                                onPress={() => setLanguageModalVisible(true)}
-                                className="flex-row items-center justify-between p-4"
-                            >
+                            <TouchableOpacity className="flex-row items-center justify-between p-4">
                                 <View className="flex-row items-center gap-3">
                                     <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
                                         <Globe size={20} color="#CD853F" />
                                     </View>
-                                    <Text className="text-sm font-medium text-beige">{t('settings.language')}</Text>
+                                    <Text className="text-sm font-medium text-beige">Dil</Text>
                                 </View>
                                 <View className="flex-row items-center gap-1">
-                                    <Text className="text-xs text-beige/50">
-                                        {i18n.language === 'tr' ? 'Türkçe' : i18n.language === 'en' ? 'English' : 'العربية'}
-                                    </Text>
+                                    <Text className="text-xs text-beige/50">T├╝rk├ğe</Text>
                                     <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
                                 </View>
                             </TouchableOpacity>
@@ -461,10 +439,10 @@ export default function SettingsScreen() {
                     {/* UYGULAMA Section */}
                     <View className="mb-8">
                         <Text className="text-xs font-semibold text-beige uppercase tracking-widest px-1 mb-2">
-                            {t('settings.application')}
+                            UYGULAMA
                         </Text>
                         <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
-                            {/* Hakkında */}
+                            {/* Hakk─▒nda */}
                             <TouchableOpacity 
                                 onPress={() => setAboutModalVisible(true)}
                                 className="flex-row items-center justify-between p-4 border-b border-white/5"
@@ -473,12 +451,12 @@ export default function SettingsScreen() {
                                     <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
                                         <Info size={20} color="#CD853F" />
                                     </View>
-                                    <Text className="text-sm font-medium text-beige">{t('settings.about')}</Text>
+                                    <Text className="text-sm font-medium text-beige">Hakk─▒nda</Text>
                                 </View>
                                 <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
                             </TouchableOpacity>
 
-                            {/* Gizlilik Politikası */}
+                            {/* Gizlilik Politikas─▒ */}
                             <TouchableOpacity 
                                 onPress={() => setPrivacyModalVisible(true)}
                                 className="flex-row items-center justify-between p-4"
@@ -487,7 +465,7 @@ export default function SettingsScreen() {
                                     <View className="w-8 h-8 rounded-lg bg-primary/10 items-center justify-center">
                                         <Shield size={20} color="#CD853F" />
                                     </View>
-                                    <Text className="text-sm font-medium text-beige">{t('settings.privacy_policy')}</Text>
+                                    <Text className="text-sm font-medium text-beige">Gizlilik Politikas─▒</Text>
                                 </View>
                                 <ChevronRight size={20} color="rgba(245, 240, 225, 0.3)" />
                             </TouchableOpacity>
@@ -499,7 +477,7 @@ export default function SettingsScreen() {
                         onPress={handleLogout}
                         className="w-full py-4 items-center"
                     >
-                        <Text className="text-sm font-bold text-primary">{t('settings.logout')}</Text>
+                        <Text className="text-sm font-bold text-primary">Oturumu Kapat</Text>
                     </TouchableOpacity>
 
                     {/* Version */}
@@ -519,7 +497,7 @@ export default function SettingsScreen() {
                 <View className="flex-1 bg-black/50 justify-end">
                     <View className="bg-emerald-deep rounded-t-3xl p-6 max-h-[80%]">
                         <View className="flex-row items-center justify-between mb-6">
-                            <Text className="text-xl font-bold text-beige">{t('settings.edit_profile')}</Text>
+                            <Text className="text-xl font-bold text-beige">Profili D├╝zenle</Text>
                             <TouchableOpacity onPress={() => setProfileModalVisible(false)}>
                                 <X size={24} color="#F5F0E1" />
                             </TouchableOpacity>
@@ -533,7 +511,7 @@ export default function SettingsScreen() {
                                         {editedProfile.profileImage ? (
                                             <Image source={{ uri: editedProfile.profileImage }} className="w-full h-full" />
                                         ) : (
-                                            <Text className="text-5xl text-beige/40">👤</Text>
+                                            <Text className="text-5xl text-beige/40">­şæñ</Text>
                                         )}
                                     </View>
                                     <TouchableOpacity 
@@ -543,36 +521,36 @@ export default function SettingsScreen() {
                                         <Camera size={14} color="#FFFFFF" />
                                     </TouchableOpacity>
                                 </View>
-                                <Text className="text-xs text-beige/50 mt-2">{t('settings.add_profile_photo')}</Text>
+                                <Text className="text-xs text-beige/50 mt-2">Profil foto─şraf─▒ ekle</Text>
                             </View>
 
                             {/* Ad */}
                             <View className="mb-4">
-                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">{t('settings.name')}</Text>
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Ad</Text>
                                 <TextInput
                                     value={editedProfile.name}
                                     onChangeText={(text) => setEditedProfile({ ...editedProfile, name: text })}
                                     className="bg-emerald-card border border-white/10 rounded-xl p-4 text-beige"
                                     placeholderTextColor="rgba(245, 240, 225, 0.3)"
-                                    placeholder={t('settings.name_placeholder')}
+                                    placeholder="Ad─▒n─▒z"
                                 />
                             </View>
 
                             {/* Soyad */}
                             <View className="mb-4">
-                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">{t('settings.surname')}</Text>
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Soyad</Text>
                                 <TextInput
                                     value={editedProfile.surname}
                                     onChangeText={(text) => setEditedProfile({ ...editedProfile, surname: text })}
                                     className="bg-emerald-card border border-white/10 rounded-xl p-4 text-beige"
                                     placeholderTextColor="rgba(245, 240, 225, 0.3)"
-                                    placeholder={t('settings.surname_placeholder')}
+                                    placeholder="Soyad─▒n─▒z"
                                 />
                             </View>
 
                             {/* Email */}
                             <View className="mb-4">
-                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">{t('settings.email')}</Text>
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Email</Text>
                                 <TextInput
                                     value={editedProfile.email}
                                     onChangeText={(text) => setEditedProfile({ ...editedProfile, email: text })}
@@ -584,15 +562,15 @@ export default function SettingsScreen() {
                                 />
                             </View>
 
-                            {/* Doğum Tarihi */}
+                            {/* Do─şum Tarihi */}
                             <View className="mb-4">
-                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">{t('settings.birth_date')}</Text>
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Do─şum Tarihi</Text>
                                 <TouchableOpacity
                                     onPress={() => setShowBirthDatePicker(true)}
                                     className="bg-emerald-card border border-white/10 rounded-xl p-4"
                                 >
                                     <Text className="text-beige">
-                                        {editedProfile.birthDate ? format(new Date(editedProfile.birthDate), 'd MMMM yyyy', { locale: tr }) : t('settings.select_date')}
+                                        {editedProfile.birthDate ? format(new Date(editedProfile.birthDate), 'd MMMM yyyy', { locale: tr }) : 'Tarih se├ğin'}
                                     </Text>
                                 </TouchableOpacity>
                                 {showBirthDatePicker && (
@@ -612,7 +590,7 @@ export default function SettingsScreen() {
 
                             {/* Cinsiyet */}
                             <View className="mb-4">
-                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">{t('settings.gender')}</Text>
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Cinsiyet</Text>
                                 <View className="flex-row gap-3">
                                     <TouchableOpacity
                                         onPress={() => setEditedProfile({ ...editedProfile, gender: 'male' })}
@@ -623,7 +601,7 @@ export default function SettingsScreen() {
                                         }}
                                     >
                                         <Text className="text-center font-bold" style={{ color: editedProfile.gender === 'male' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>
-                                            {t('settings.male')}
+                                            Erkek
                                         </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
@@ -635,21 +613,21 @@ export default function SettingsScreen() {
                                         }}
                                     >
                                         <Text className="text-center font-bold" style={{ color: editedProfile.gender === 'female' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>
-                                            {t('settings.female')}
+                                            Kad─▒n
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
                             </View>
 
-                            {/* Buluğ Çağı Başlangıcı */}
+                            {/* Bulu─ş ├ça─ş─▒ Ba┼şlang─▒c─▒ */}
                             <View className="mb-6">
-                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">{t('settings.bulugh_date')}</Text>
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">Bulu─ş ├ça─ş─▒ Ba┼şlang─▒c─▒</Text>
                                 <TouchableOpacity
                                     onPress={() => setShowBulughDatePicker(true)}
                                     className="bg-emerald-card border border-white/10 rounded-xl p-4"
                                 >
                                     <Text className="text-beige">
-                                        {editedProfile.bulughDate ? format(new Date(editedProfile.bulughDate), 'd MMMM yyyy', { locale: tr }) : t('settings.select_date')}
+                                        {editedProfile.bulughDate ? format(new Date(editedProfile.bulughDate), 'd MMMM yyyy', { locale: tr }) : 'Tarih se├ğin'}
                                     </Text>
                                 </TouchableOpacity>
                                 {showBulughDatePicker && (
@@ -672,7 +650,7 @@ export default function SettingsScreen() {
                                 onPress={handleSaveProfile}
                                 className="bg-primary py-4 rounded-2xl shadow-lg mb-4"
                             >
-                                <Text className="text-beige font-bold text-center text-base">{t('common.save')}</Text>
+                                <Text className="text-beige font-bold text-center text-base">Kaydet</Text>
                             </TouchableOpacity>
                         </ScrollView>
                     </View>
@@ -689,7 +667,7 @@ export default function SettingsScreen() {
                 <View className="flex-1 bg-black/50 justify-end">
                     <View className="bg-emerald-deep rounded-t-3xl p-6">
                         <View className="flex-row items-center justify-between mb-6">
-                            <Text className="text-xl font-bold text-beige">{t('settings.prayer_reminder_title')}</Text>
+                            <Text className="text-xl font-bold text-beige">Vakit Hat─▒rlat─▒c─▒</Text>
                             <TouchableOpacity onPress={() => setPrayerReminderModalVisible(false)}>
                                 <X size={24} color="#F5F0E1" />
                             </TouchableOpacity>
@@ -698,13 +676,13 @@ export default function SettingsScreen() {
                         {/* Toggle All */}
                         <View className="bg-emerald-card rounded-2xl p-4 mb-4 border border-white/5">
                             <View className="flex-row items-center justify-between">
-                                <Text className="text-sm font-bold text-beige">{isAnyPrayerReminderEnabled ? t('settings.toggle_all_off_full') : t('settings.toggle_all_on_full')}</Text>
+                                <Text className="text-sm font-bold text-beige">T├╝m├╝n├╝ {isAnyPrayerReminderEnabled ? 'Kapat' : 'A├ğ'}</Text>
                                 <TouchableOpacity
                                     onPress={() => toggleAllPrayerReminders(!isAnyPrayerReminderEnabled)}
                                     className="bg-primary px-6 py-2 rounded-xl"
                                 >
                                     <Text className="text-beige font-bold text-xs">
-                                        {isAnyPrayerReminderEnabled ? t('settings.toggle_all_off') : t('settings.toggle_all_on')}
+                                        {isAnyPrayerReminderEnabled ? 'Kapat' : 'A├ğ'}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
@@ -712,7 +690,7 @@ export default function SettingsScreen() {
 
                         {/* Individual Prayer Toggles */}
                         <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
-            {PRAYER_TIMES.map((prayer, index) => (
+                            {PRAYER_TIMES.map((prayer, index) => (
                                 <View
                                     key={prayer.key}
                                     className="flex-row items-center justify-between p-4"
@@ -721,7 +699,7 @@ export default function SettingsScreen() {
                                         borderBottomColor: 'rgba(255, 255, 255, 0.05)',
                                     }}
                                 >
-                                    <Text className="text-sm font-medium text-beige">{t(`prayers.${prayer.key}`)}</Text>
+                                    <Text className="text-sm font-medium text-beige">{prayer.label}</Text>
                                     <Switch
                                         value={prayerReminders[prayer.key as keyof typeof prayerReminders]}
                                         onValueChange={(value) =>
@@ -737,7 +715,7 @@ export default function SettingsScreen() {
 
                         <View className="mt-4">
                             <Text className="text-xs text-beige/50 text-center">
-                                {t('settings.reminder_info')}
+                                En az bir vakit a├ğ─▒k oldu─şunda hat─▒rlat─▒c─▒ aktif olur
                             </Text>
                         </View>
                     </View>
@@ -754,7 +732,7 @@ export default function SettingsScreen() {
                 <View className="flex-1 bg-black/50 justify-end">
                     <View className="bg-emerald-deep rounded-t-3xl p-6 max-h-[80%]">
                         <View className="flex-row items-center justify-between mb-6">
-                            <Text className="text-xl font-bold text-beige">{t('settings.about')}</Text>
+                            <Text className="text-xl font-bold text-beige">Hakk─▒nda</Text>
                             <TouchableOpacity onPress={() => setAboutModalVisible(false)}>
                                 <X size={24} color="#F5F0E1" />
                             </TouchableOpacity>
@@ -763,79 +741,39 @@ export default function SettingsScreen() {
                         <ScrollView showsVerticalScrollIndicator={false}>
                             <View className="space-y-4">
                                 <View>
-                                    <Text className="text-lg font-bold text-beige mb-2">{t('settings.about_app_name')}</Text>
+                                    <Text className="text-lg font-bold text-beige mb-2">Farz Uygulamas─▒</Text>
                                     <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.about_description')}
+                                        Farz, M├╝sl├╝manlar─▒n namaz ve oru├ğ bor├ğlar─▒n─▒ takip etmelerini kolayla┼şt─▒rmak i├ğin geli┼ştirilmi┼ş bir uygulamad─▒r.
                                     </Text>
                                 </View>
 
                                 <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.features')}</Text>
+                                    <Text className="text-base font-bold text-beige mb-2">├ûzellikler</Text>
                                     <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.features_list')}
+                                        ÔÇó Namaz ve oru├ğ bor├ğlar─▒n─▒z─▒ kolayca takip edin{"\n"}
+                                        ÔÇó G├╝nl├╝k, haftal─▒k ve ayl─▒k istatistiklerinizi g├Âr├╝nt├╝leyin{"\n"}
+                                        ÔÇó Vakit hat─▒rlat─▒c─▒lar─▒ ile ibadetlerinizi aksatmay─▒n{"\n"}
+                                        ÔÇó Ge├ğmi┼ş kay─▒tlar─▒n─▒z─▒ d├╝zenleyin ve y├Ânetin{"\n"}
+                                        ÔÇó Tahmini tamamlanma tarihini ├Â─şrenin
                                     </Text>
                                 </View>
 
                                 <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.backup')}</Text>
+                                    <Text className="text-base font-bold text-beige mb-2">─░leti┼şim</Text>
                                     <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.backup_restore_desc')}
-                                    </Text>
-                                </View>
-
-                                <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.contact')}</Text>
-                                    <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.contact_text')}
+                                        Sorular─▒n─▒z ve ├Ânerileriniz i├ğin:{"\n"}
+                                        destek@farzapp.com
                                     </Text>
                                 </View>
 
                                 <View className="pt-4 border-t border-white/10">
                                     <Text className="text-xs text-beige/50 text-center">
                                         Farz v2.4.0 (2024){"\n"}
-                                        {t('settings.copyright')}
+                                        ┬® 2024 T├╝m haklar─▒ sakl─▒d─▒r.
                                     </Text>
                                 </View>
                             </View>
                         </ScrollView>
-                    </View>
-                </View>
-            </Modal>
-
-            {/* Language Selection Modal */}
-            <Modal
-                visible={languageModalVisible}
-                animationType="slide"
-                transparent={true}
-                onRequestClose={() => setLanguageModalVisible(false)}
-            >
-                <View className="flex-1 bg-black/50 justify-end">
-                    <View className="bg-emerald-deep rounded-t-3xl p-6">
-                        <View className="flex-row items-center justify-between mb-6">
-                            <Text className="text-xl font-bold text-beige">{t('settings.language')}</Text>
-                            <TouchableOpacity onPress={() => setLanguageModalVisible(false)}>
-                                <X size={24} color="#F5F0E1" />
-                            </TouchableOpacity>
-                        </View>
-                        
-                        <View className="bg-emerald-card rounded-2xl overflow-hidden border border-white/5">
-                            {['tr', 'en', 'ar'].map((lang, index) => (
-                                <TouchableOpacity 
-                                    key={lang}
-                                    onPress={() => {
-                                        changeLanguage(lang);
-                                        setLanguageModalVisible(false);
-                                    }}
-                                    className="flex-row items-center justify-between p-4 border-b border-white/5 last:border-b-0"
-                                    style={{ borderBottomWidth: index === 2 ? 0 : 1, borderBottomColor: 'rgba(255,255,255,0.05)' }}
-                                >
-                                    <Text className={`text-base font-semibold ${i18n.language === lang ? 'text-primary' : 'text-beige'}`}>
-                                        {lang === 'tr' ? 'Türkçe' : lang === 'en' ? 'English' : 'العربية'}
-                                    </Text>
-                                    {i18n.language === lang && <View className="w-3 h-3 rounded-full bg-primary" />}
-                                </TouchableOpacity>
-                            ))}
-                        </View>
                     </View>
                 </View>
             </Modal>
@@ -850,7 +788,7 @@ export default function SettingsScreen() {
                 <View className="flex-1 bg-black/50 justify-end">
                     <View className="bg-emerald-deep rounded-t-3xl p-6 max-h-[80%]">
                         <View className="flex-row items-center justify-between mb-6">
-                            <Text className="text-xl font-bold text-beige">{t('settings.privacy_policy')}</Text>
+                            <Text className="text-xl font-bold text-beige">Gizlilik Politikas─▒</Text>
                             <TouchableOpacity onPress={() => setPrivacyModalVisible(false)}>
                                 <X size={24} color="#F5F0E1" />
                             </TouchableOpacity>
@@ -859,50 +797,43 @@ export default function SettingsScreen() {
                         <ScrollView showsVerticalScrollIndicator={false}>
                             <View className="space-y-4">
                                 <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.privacy_data_collection')}</Text>
+                                    <Text className="text-base font-bold text-beige mb-2">Veri Toplama</Text>
                                     <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.privacy_data_collection_text')}
+                                        Farz uygulamas─▒, yaln─▒zca sizin taraf─▒n─▒zdan girilen ki┼şisel bilgileri (ad, soyad, do─şum tarihi, cinsiyet) ve ibadet kay─▒tlar─▒n─▒z─▒ cihaz─▒n─▒zda yerel olarak saklar. Bu veriler hi├ğbir ┼şekilde ├╝├ğ├╝nc├╝ taraflarla payla┼ş─▒lmaz.
                                     </Text>
                                 </View>
 
                                 <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.privacy_security')}</Text>
+                                    <Text className="text-base font-bold text-beige mb-2">Veri G├╝venli─şi</Text>
                                     <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.privacy_security_text')}
+                                        T├╝m verileriniz cihaz─▒n─▒z─▒n yerel veritaban─▒nda ┼şifrelenmi┼ş olarak saklan─▒r. Uygulama, internet ba─şlant─▒s─▒ gerektirmez ve verileriniz yaln─▒zca sizin kontrol├╝n├╝zdedir.
                                     </Text>
                                 </View>
 
                                 <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.privacy_notifications')}</Text>
+                                    <Text className="text-base font-bold text-beige mb-2">Bildirimler</Text>
                                     <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.privacy_notifications_text')}
+                                        Vakit hat─▒rlat─▒c─▒lar─▒ i├ğin yerel bildirimler kullan─▒l─▒r. Bu bildirimler yaln─▒zca cihaz─▒n─▒zda olu┼şturulur ve hi├ğbir veri d─▒┼şar─▒ya g├Ânderilmez.
                                     </Text>
                                 </View>
 
                                 <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.privacy_data_deletion')}</Text>
+                                    <Text className="text-base font-bold text-beige mb-2">Veri Silme</Text>
                                     <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.privacy_data_deletion_text')}
+                                        Ayarlar men├╝s├╝nden "Verileri S─▒f─▒rla" se├ğene─şini kullanarak t├╝m verilerinizi kal─▒c─▒ olarak silebilirsiniz. Bu i┼şlem geri al─▒namaz.
                                     </Text>
                                 </View>
 
                                 <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.prayer_reminder')}</Text>
+                                    <Text className="text-base font-bold text-beige mb-2">De─şi┼şiklikler</Text>
                                     <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.prayer_reminder_desc')}
-                                    </Text>
-                                </View>
-
-                                <View>
-                                    <Text className="text-base font-bold text-beige mb-2">{t('settings.privacy_changes')}</Text>
-                                    <Text className="text-sm text-beige/70 leading-relaxed">
-                                        {t('settings.privacy_changes_text')}
+                                        Bu gizlilik politikas─▒ zaman zaman g├╝ncellenebilir. ├ûnemli de─şi┼şiklikler oldu─şunda uygulama i├ğinde bilgilendirileceksiniz.
                                     </Text>
                                 </View>
 
                                 <View className="pt-4 border-t border-white/10">
                                     <Text className="text-xs text-beige/50 text-center">
-                                        {t('settings.privacy_last_updated')}
+                                        Son g├╝ncelleme: 12 ┼Şubat 2026
                                     </Text>
                                 </View>
                             </View>
@@ -910,32 +841,6 @@ export default function SettingsScreen() {
                     </View>
                 </View>
             </Modal>
-
-            {/* Reset Data Alert */}
-            <CustomAlert
-                visible={resetDataAlertVisible}
-                title={t('settings.reset_data_title')}
-                message={t('settings.reset_data_confirm')}
-                confirmText={t('settings.reset_data')}
-                cancelText={t('common.cancel')}
-                onConfirm={confirmResetData}
-                onCancel={() => setResetDataAlertVisible(false)}
-                type="danger"
-                showCancel={true}
-            />
-
-            {/* Logout Alert */}
-            <CustomAlert
-                visible={logoutAlertVisible}
-                title={t('settings.logout_title')}
-                message={t('settings.logout_confirm')}
-                confirmText={t('settings.logout')}
-                cancelText={t('common.cancel')}
-                onConfirm={confirmLogout}
-                onCancel={() => setLogoutAlertVisible(false)}
-                type="danger"
-                showCancel={true}
-            />
         </View>
     );
 }

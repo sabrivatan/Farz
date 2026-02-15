@@ -5,22 +5,24 @@ import { useRouter } from 'expo-router';
 import { ChevronLeft, Save } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Dhikr } from '../zikir';
+import { useTranslation } from 'react-i18next'; // Added
 
 export default function CreateZikir() {
     const router = useRouter();
+    const { t } = useTranslation(); // Added
     const [nameTurkish, setNameTurkish] = useState('');
     const [nameArabic, setNameArabic] = useState('');
     const [targetCount, setTargetCount] = useState('33');
 
     const handleSave = async () => {
         if (!nameTurkish.trim()) {
-            Alert.alert('Hata', 'Lütfen zikir adını giriniz.');
+            Alert.alert(t('common.error'), t('zikir.error_name'));
             return;
         }
 
         const target = parseInt(targetCount);
         if (isNaN(target) || target <= 0) {
-            Alert.alert('Hata', 'Lütfen geçerli bir hedef sayısı giriniz.');
+            Alert.alert(t('common.error'), t('zikir.error_target'));
             return;
         }
 
@@ -44,12 +46,12 @@ export default function CreateZikir() {
             // Save back
             await AsyncStorage.setItem('custom_dhikrs', JSON.stringify(customDhikrs));
             
-            Alert.alert('Başarılı', 'Yeni zikir oluşturuldu.', [
-                { text: 'Tamam', onPress: () => router.back() }
+            Alert.alert(t('common.success'), t('zikir.success_created'), [
+                { text: t('common.confirm'), onPress: () => router.back() }
             ]);
         } catch (error) {
             console.error('Error saving dhikr:', error);
-            Alert.alert('Hata', 'Zikir kaydedilemedi.');
+            Alert.alert(t('common.error'), t('zikir.error_save'));
         }
     };
 
@@ -63,7 +65,7 @@ export default function CreateZikir() {
                             <ChevronLeft color="#F5F0E1" size={24} />
                         </TouchableOpacity>
                         <Text className="text-xl font-bold text-beige tracking-tight">
-                            Yeni Zikir Oluştur
+                            {t('zikir.create_title')}
                         </Text>
                     </View>
                 </View>
@@ -76,11 +78,11 @@ export default function CreateZikir() {
                         {/* Name Input */}
                         <View className="mb-6">
                             <Text className="text-beige/60 text-sm uppercase tracking-widest mb-2">
-                                ZİKİR ADI (TÜRKÇE)
+                                {t('zikir.name_turkish_label')}
                             </Text>
                             <TextInput
                                 className="bg-emerald-card text-beige p-4 rounded-xl border border-white/10 text-lg"
-                                placeholder="Örn: Ya Rafi"
+                                placeholder={t('zikir.name_placeholder')}
                                 placeholderTextColor="#F5F0E1aa"
                                 value={nameTurkish}
                                 onChangeText={setNameTurkish}
@@ -90,7 +92,7 @@ export default function CreateZikir() {
                         {/* Arabic Name Input */}
                         <View className="mb-6">
                             <Text className="text-beige/60 text-sm uppercase tracking-widest mb-2">
-                                ARAPÇA METİN (OPSİYONEL)
+                                {t('zikir.name_arabic_label')}
                             </Text>
                             <TextInput
                                 className="bg-emerald-card text-beige p-4 rounded-xl border border-white/10 text-lg font-amiri text-right"
@@ -104,7 +106,7 @@ export default function CreateZikir() {
                         {/* Target Count Input */}
                         <View className="mb-8">
                             <Text className="text-beige/60 text-sm uppercase tracking-widest mb-2">
-                                HEDEF SAYISI
+                                {t('zikir.target_count_label')}
                             </Text>
                             <TextInput
                                 className="bg-emerald-card text-beige p-4 rounded-xl border border-white/10 text-lg"
@@ -136,7 +138,7 @@ export default function CreateZikir() {
                         >
                             <Save color="#FFF" size={20} />
                             <Text className="text-white font-bold text-lg">
-                                Kaydet
+                                {t('common.save')}
                             </Text>
                         </TouchableOpacity>
                     </ScrollView>

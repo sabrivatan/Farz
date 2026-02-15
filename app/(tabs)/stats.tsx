@@ -5,12 +5,13 @@ import { useRouter, useFocusEffect } from 'expo-router';
 import { ChevronLeft, CheckCircle2, Clock, Calendar, MoonStar } from 'lucide-react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { format, addDays, startOfWeek } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { useTranslation } from 'react-i18next'; // Added
 
 const { width } = Dimensions.get('window');
 
 export default function StatsScreen() {
     const router = useRouter();
+    const { t, i18n } = useTranslation(); // Added
     const [activeTab, setActiveTab] = useState<'prayer' | 'fasting'>('prayer');
     
     const [stats, setStats] = useState({
@@ -20,7 +21,8 @@ export default function StatsScreen() {
             completed: 0,
             remaining: 0,
             weeklyData: [0,0,0,0,0,0,0],
-            estimatedCompletion: '-'
+            estimatedCompletion: '-',
+            breakdown: {} as Record<string, number>
         },
         fasting: {
             completionPercent: 0,
@@ -35,14 +37,13 @@ export default function StatsScreen() {
     useFocusEffect(
         useCallback(() => {
             fetchStats();
-        }, [])
+        }, [i18n.language]) // Re-fetch on language change to update formatted dates
     );
 
     const fetchStats = async () => {
         try {
             const { getDebtCounts, getDb } = require('@/db');
             const { differenceInDays, addDays, getDay } = require('date-fns');
-            const { tr } = require('date-fns/locale');
             
             const db = getDb();
             const counts = await getDebtCounts();
@@ -52,55 +53,41 @@ export default function StatsScreen() {
             const user = profile[0];
 
             // 1. Calculate Total Obligations (Days since Bulugh)
-            // Note: This logic assumes 'bulugh_date' exists. If not, fallback or handle error.
             const today = new Date();
             const bulughDate = new Date(user.bulugh_date);
             const totalDays = differenceInDays(today, bulughDate);
             
             // Prayer Stats
-            // Total Slots = Total Days * 6 (5 Daily + Witr)
-            // But getting detailed completed count is hard if we only store 'debt'.
-            // Actually, we store 'debt'.
-            // Total Obligation Slots = Total Days * 6
-            // Remaining Debt = counts.prayerDebt (This is sum of all types)
-            // Completed = Total Obligation - Remaining Debt
-            
-            const totalPrayerSlots = totalDays * 6;
+            // Prayer Stats
+            const totalPrayerSlots = totalDays * 5;
             const prayerDebt = counts.prayerDebt;
             const completedPrayers = Math.max(0, totalPrayerSlots - prayerDebt);
             const prayerPercent = totalPrayerSlots > 0 ? Math.round((completedPrayers / totalPrayerSlots) * 100) : 0;
             
-            // Estimation: Based on user velocity? For now, simple static or just 'N/A'
-            // Let's assume 1 extra day per day -> (Remaining / 1) days
-            const prayersLeftDays = Math.ceil(prayerDebt / 6); // Rough days equivalent
-            // If performing 2x speed (1 current + 1 kaza), then completion is in prayersLeftDays
-            const estimatedPrayerDate = addDays(today, prayersLeftDays).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+            // Estimation
+            // Estimation
+            const prayersLeftDays = Math.ceil(prayerDebt / 5); 
+            const estimatedPrayerDate = addDays(today, prayersLeftDays).toLocaleDateString(i18n.language, { day: 'numeric', month: 'long', year: 'numeric' });
 
             // Fasting Stats
-            const totalFastingDays = totalDays; // Rough approximation (should be Ramadans only but let's use days for now or simplified)
-            // Actually fasting obligation is ~30 days per year.
-            // Let's approximate: (Total Days / 365.25) * 30
             const approxRamadanDays = Math.floor((totalDays / 365.25) * 30);
             const fastingDebt = counts.fastingDebt;
             const completedFasting = Math.max(0, approxRamadanDays - fastingDebt);
             const fastingPercent = approxRamadanDays > 0 ? Math.round((completedFasting / approxRamadanDays) * 100) : 0;
-            const estimatedFastingDate = addDays(today, fastingDebt).toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' });
+            const estimatedFastingDate = addDays(today, fastingDebt).toLocaleDateString(i18n.language, { day: 'numeric', month: 'long', year: 'numeric' });
 
-             // Weekly Data (Last 7 days activity)
-             // We need to query daily_status for the last 7 days
-             const weeklyData = [0,0,0,0,0,0,0]; // Mon-Sun
-             // For now mock weekly data or query it if time permits. keeping 0s for safety or random for demo if needed.
-             // Real query:
-             // SELECT date, count(*) FROM daily_status WHERE status='completed' AND date >= date('now', '-7 days') GROUP BY date
-             
+             // Weekly Data (Mocked)
+             // Real query: SELECT date, count(*) FROM daily_status...
+            
             setStats({
                 prayer: {
                     completionPercent: prayerPercent,
                     totalObligation: totalPrayerSlots,
                     completed: completedPrayers,
                     remaining: prayerDebt,
-                    weeklyData: [2,3,4,4,5,5,4], // Mocked activity for now
-                    estimatedCompletion: estimatedPrayerDate
+                    weeklyData: [2,3,4,4,5,5,4], 
+                    estimatedCompletion: estimatedPrayerDate,
+                    breakdown: counts.breakdown // Added
                 },
                 fasting: {
                     completionPercent: fastingPercent,
@@ -119,7 +106,7 @@ export default function StatsScreen() {
     
     // Calculate current stats for UI
     const currentStats = activeTab === 'prayer' ? stats.prayer : stats.fasting;
-    const weekDays = ['PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CMT', 'PAZ'];
+    const weekDays = [t('days.mon'), t('days.tue'), t('days.wed'), t('days.thu'), t('days.fri'), t('days.sat'), t('days.sun')];
 
     // Calculate circle progress
     const radius = 95;
@@ -136,16 +123,16 @@ export default function StatsScreen() {
                             <ChevronLeft color="#F5F0E1" size={24} />
                         </TouchableOpacity>
                         <Text className="text-xl font-bold text-beige tracking-tight">
-                            İstatistikler
+                            {t('stats.title')}
                         </Text>
                     </View>
                 </View>
 
                 <ScrollView className="flex-1 px-4" showsVerticalScrollIndicator={false}>
-                    {/* Tab Selector - Matching History Screen */}
+                    {/* Tab Selector */}
                     <View className="px-0 pt-4 mb-6">
                         <Text className="text-xs font-semibold text-beige/60 uppercase tracking-widest mb-4 ml-1">
-                            KATEGORİ SEÇİMİ
+                            {t('history.category_selection')}
                         </Text>
                         <View className="grid grid-cols-2 flex-row gap-3">
                             <TouchableOpacity 
@@ -167,7 +154,7 @@ export default function StatsScreen() {
                                      <View className="w-3 h-3 bg-beige rounded-full absolute -top-1 left-1" />
                                 </View>
                                 <Text className="font-bold" style={{ color: activeTab === 'prayer' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>
-                                    Namaz
+                                    {t('common.prayer')}
                                 </Text>
                             </TouchableOpacity>
 
@@ -186,7 +173,7 @@ export default function StatsScreen() {
                             >
                                 <MoonStar size={18} color={activeTab === 'fasting' ? "#F5F0E1" : "rgba(245, 240, 225, 0.6)"} />
                                 <Text className="font-bold" style={{ color: activeTab === 'fasting' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>
-                                    Oruç
+                                    {t('common.fasting')}
                                 </Text>
                             </TouchableOpacity>
                         </View>
@@ -225,7 +212,7 @@ export default function StatsScreen() {
                                     {currentStats.completionPercent}%
                                 </Text>
                                 <Text className="text-[10px] font-bold uppercase tracking-widest text-beige opacity-80 mt-1">
-                                    Ömür Boyu Tamamlanan
+                                    {t('stats.lifetime_completed')}
                                 </Text>
                             </View>
                         </View>
@@ -234,13 +221,13 @@ export default function StatsScreen() {
                     {/* Total Obligation Card */}
                     <View className="bg-emerald-card/40 border border-white/10 p-5 rounded-2xl mb-4">
                         <Text className="text-[10px] uppercase font-bold text-primary/80 tracking-wider text-center mb-1">
-                            Toplam Farz (Bugüne Kadar)
+                            {t('stats.total_obligation')}
                         </Text>
                         <Text className="text-3xl font-black text-beige text-center">
                             {currentStats.totalObligation.toLocaleString()}
                         </Text>
                         <Text className="text-[10px] text-beige/50 text-center mt-1">
-                            Buluğ çağından itibaren toplam yükümlülük
+                            {t('stats.obligation_desc')}
                         </Text>
                     </View>
 
@@ -251,7 +238,7 @@ export default function StatsScreen() {
                                 <CheckCircle2 size={24} color="#CD853F" />
                             </View>
                             <Text className="text-[11px] uppercase font-bold text-beige/70 mb-1">
-                                Tamamlanan
+                                {t('stats.completed')}
                             </Text>
                             <Text className="text-2xl font-bold text-beige">
                                 {currentStats.completed.toLocaleString()}
@@ -262,7 +249,7 @@ export default function StatsScreen() {
                                 <Clock size={24} color="#CD853F" />
                             </View>
                             <Text className="text-[11px] uppercase font-bold text-beige/70 mb-1">
-                                Kalan İbadetler
+                                {t('stats.remaining')}
                             </Text>
                             <Text className="text-2xl font-bold text-beige">
                                 {currentStats.remaining.toLocaleString()}
@@ -273,9 +260,9 @@ export default function StatsScreen() {
                     {/* Weekly Progress */}
                     <View className="mb-8">
                         <View className="flex-row justify-between items-end mb-4">
-                            <Text className="text-lg font-bold text-beige">7 Günlük İlerleme</Text>
+                            <Text className="text-lg font-bold text-beige">{t('stats.weekly_progress')}</Text>
                             <Text className="text-xs font-medium text-beige/50">
-                                {activeTab === 'prayer' ? 'Kılınan Vakit Sayısı' : 'Tutulan Gün'}
+                                {activeTab === 'prayer' ? t('stats.prayers_performed') : t('stats.fasting_days')}
                             </Text>
                         </View>
                         <View className="bg-emerald-card/40 border border-white/10 p-6 rounded-2xl">
@@ -311,7 +298,26 @@ export default function StatsScreen() {
                                     );
                                 })}
                             </View>
+                    </View>
+                    
+                    {/* Detailed Breakdown (New) */}
+                    {activeTab === 'prayer' && stats.prayer.breakdown && (
+                        <View className="bg-emerald-card/40 border border-white/10 p-5 rounded-2xl mb-8 mt-6">
+                            <Text className="text-lg font-bold text-beige mb-4">{t('stats.breakdown_title')}</Text>
+                            <View className="gap-3">
+                                {['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'].map((type) => (
+                                    <View key={type} className="flex-row items-center justify-between border-b border-white/5 pb-2 last:border-0">
+                                        <Text className="text-beige/70 font-medium capitalize">
+                                            {t(`prayers.${type}`)}
+                                        </Text>
+                                        <Text className="text-white font-bold text-lg">
+                                            {stats.prayer.breakdown[type]?.toLocaleString() || 0}
+                                        </Text>
+                                    </View>
+                                ))}
+                            </View>
                         </View>
+                    )}
                     </View>
 
                     {/* Estimated Completion Date */}
@@ -322,14 +328,10 @@ export default function StatsScreen() {
                             </View>
                             <View className="flex-1">
                                 <Text className="font-bold text-lg mb-1 text-emerald-deep">
-                                    Tahmini Bitiş Tarihi
+                                    {t('stats.estimated_completion')}
                                 </Text>
                                 <Text className="text-sm text-emerald-deep/80 leading-relaxed">
-                                    Harika bir istikrar sergiliyorsunuz! Bu tempoyla kalan tüm ibadetlerinizi{' '}
-                                    <Text className="font-bold border-b-2 border-primary/40">
-                                        {currentStats.estimatedCompletion}
-                                    </Text>
-                                    {' '}tarihinde tamamlayabilirsiniz.
+                                    {t('stats.estimation_text', { date: currentStats.estimatedCompletion })}
                                 </Text>
                             </View>
                         </View>
@@ -338,7 +340,7 @@ export default function StatsScreen() {
                     {/* Information Note */}
                     <View className="mb-8 px-2">
                         <Text className="text-xs text-beige/40 text-center leading-relaxed">
-                            Not: Buluğ çağı başlangıç tarihinizi ve diğer hesaplama parametrelerini Profil → Kişisel Bilgiler ekranından düzenleyebilirsiniz.
+                            {t('stats.info_note')}
                         </Text>
                     </View>
 

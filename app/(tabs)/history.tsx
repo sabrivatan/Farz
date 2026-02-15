@@ -3,11 +3,12 @@ import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, TextI
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect } from 'expo-router';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, getYear, setYear, isFuture } from 'date-fns';
-import { tr } from 'date-fns/locale';
+import { tr, enUS, ar } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Check, Minus, Plus, Calendar, RotateCcw, Info, Utensils, Award, MoonStar } from 'lucide-react-native';
 import { getDailyStatus, toggleDailyStatus, getMonthlyStats, initDB, quickUpdateKaza } from '../../db';
 import { SyncService } from '@/services/SyncService';
 import CustomAlert from '../../components/CustomAlert';
+import { useTranslation } from 'react-i18next';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
 const DAY_SIZE = (SCREEN_WIDTH - 60) / 7;
@@ -19,16 +20,8 @@ interface PrayerType {
     label: string;
 }
 
-const PRAYER_TYPES: PrayerType[] = [
-    { key: 'fajr', label: 'Sabah' },
-    { key: 'dhuhr', label: 'Öğle' },
-    { key: 'asr', label: 'İkindi' },
-    { key: 'maghrib', label: 'Akşam' },
-    { key: 'isha', label: 'Yatsı' },
-];
-
 interface DailyStatus {
-    [key: string]: boolean | string | undefined; // dynamic keys for prayer types
+    [key: string]: boolean | string | undefined;
     completed?: boolean;
     note?: string;
 }
@@ -47,6 +40,9 @@ interface SessionCounts {
 
 export default function HistoryScreen() {
     const router = useRouter();
+    const { t, i18n } = useTranslation();
+    const dateLocale = i18n.language === 'en' ? enUS : i18n.language === 'ar' ? ar : tr;
+
     const [selectedDate, setSelectedDate] = useState(new Date());
     const [viewDate, setViewDate] = useState(new Date());
     const [activeTab, setActiveTab] = useState<'prayer' | 'fasting'>('prayer');
@@ -55,10 +51,8 @@ export default function HistoryScreen() {
     const [sessionCounts, setSessionCounts] = useState<SessionCounts>({});
     const [unsavedChanges, setUnsavedChanges] = useState<Map<string, boolean>>(new Map());
     
-    // Swipe gesture refs (using ref instead of state for immediate updates)
     const touchStartX = useRef<number>(0);
 
-    // Custom alert state
     const [alertVisible, setAlertVisible] = useState(false);
     const [alertConfig, setAlertConfig] = useState<{
         type: 'success' | 'danger' | 'info' | 'warning';
@@ -66,9 +60,16 @@ export default function HistoryScreen() {
         message: string;
     }>({ type: 'info', title: '', message: '' });
 
-    // Generate years for selector
     const currentYear = getYear(new Date());
     const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
+
+    const PRAYER_TYPES: PrayerType[] = [
+        { key: 'fajr', label: t('prayers.fajr') },
+        { key: 'dhuhr', label: t('prayers.dhuhr') },
+        { key: 'asr', label: t('prayers.asr') },
+        { key: 'maghrib', label: t('prayers.maghrib') },
+        { key: 'isha', label: t('prayers.isha') },
+    ];
 
     useFocusEffect(
         React.useCallback(() => {
@@ -78,11 +79,7 @@ export default function HistoryScreen() {
         }, [viewDate, activeTab])
     );
 
-    // Fetch session counts for quick entry
     const fetchSessionCounts = async () => {
-        // This would ideally come from a separate DB query or aggregated from daily statuses
-        // For now, we'll keep the local state counter logic but in a real app this should reflect DB state
-        // We'll initialize with 0
         const counts: SessionCounts = {};
         PRAYER_TYPES.forEach(t => counts[t.key] = 0);
         counts['fasting'] = 0;
@@ -103,10 +100,9 @@ export default function HistoryScreen() {
                 if (!data[row.date]) data[row.date] = {};
                 
                 if (row.type === 'kefaret_fasting') {
-                    // Store kefaret status separately or in a specific way
                     kefaret[row.date] = row.status === 'completed';
                 } else if (activeTab === 'prayer' && row.type !== 'fasting'&& row.type !== 'kefaret_fasting') {
-                     // @ts-ignore - dynamic assignment
+                     // @ts-ignore
                      data[row.date][row.type] = row.status === 'completed';
                 } else if (activeTab === 'fasting' && row.type === 'fasting') {
                      data[row.date].completed = row.status === 'completed';
@@ -155,9 +151,8 @@ export default function HistoryScreen() {
 
     const handleSave = async () => {
         try {
-            // 1. Process Calendar Changes (Daily Status)
             for (const [key, value] of unsavedChanges) {
-                if (key.endsWith('-note')) continue; // Skip notes for now
+                if (key.endsWith('-note')) continue;
 
                 const lastHyphenIndex = key.lastIndexOf('-');
                 const dateStr = key.substring(0, lastHyphenIndex);
@@ -165,41 +160,15 @@ export default function HistoryScreen() {
                 await toggleDailyStatus(dateStr, type, value ? 'completed' : 'pending');
             }
             
-            // 2. Process Quick Entry (Kaza Debts)
             const debtUpdates = Object.entries(sessionCounts).filter(([_, count]) => count !== 0);
             if (debtUpdates.length > 0) {
                 for (const [type, count] of debtUpdates) {
-                    await quickUpdateKaza(type, -count); // Negative count means adding debt (UI: - button adds debt)
-                    // Wait, UI:
-                    // Minus button (-1) -> sessionCounts decreases.
-                    // Plus button (+1) -> sessionCounts increases.
-                    // Logic:
-                    // If user clicks "-", they are adding a missed prayer (Debt increases).
-                    // If user clicks "+", they are performing a kaza (Debt decreases).
-                    
-                    // Let's re-read UI text: 
-                    // "Hızlı giriş ile borç ekleyebilir (-) veya yanlış girişleri düzeltebilirsiniz (+)."
-                    // "Örnek: 5 gün borç eklemek için -5, 5 gün tamamladıysanız +5 girin."
-                    
-                    // DB `debt_counts` stores positive integer for debt.
-                    // If UI is -5 (Debt increased), we need to ADD 5 to DB count.
-                    // If UI is +5 (Debt decreased/Paid), we need to SUBTRACT 5 from DB count.
-                    
-                    // So `quickUpdateKaza` takes (type, amount).
-                    // amount is added to current count.
-                    // If UI is -5 -> We want query: count = count + 5. So pass +5.
-                    // If UI is +5 -> We want query: count = count - 5. So pass -5.
-                    
-                    // So we pass: -count.
-                    // Example: UI = -5. Pass -(-5) = +5. DB adds 5. Correct.
-                    // Example: UI = +5. Pass -(5) = -5. DB subtracts 5. Correct.
+                    await quickUpdateKaza(type, -count);
                 }
             }
 
-            // Sync after all changes
             SyncService.backupData();
 
-            // Reset state
             setUnsavedChanges(new Map());
             setSessionCounts(prev => {
                 const reset: SessionCounts = {};
@@ -209,16 +178,16 @@ export default function HistoryScreen() {
 
             setAlertConfig({
                 type: 'success',
-                title: 'Başarılı',
-                message: 'Değişiklikler ve kaza borçları kaydedildi'
+                title: t('common.success'),
+                message: t('common.saved_msg')
             });
             setAlertVisible(true);
         } catch (e) {
             console.error(e);
             setAlertConfig({
                 type: 'danger',
-                title: 'Hata',
-                message: 'Kaydetme sırasında bir hata oluştu'
+                title: t('common.error'),
+                message: t('common.error_msg')
             });
             setAlertVisible(true);
         }
@@ -226,31 +195,26 @@ export default function HistoryScreen() {
 
     const handleQuickUpdate = async (type: string, change: number) => {
         const currentCount = sessionCounts[type] || 0;
-        const newCount = currentCount + change; // Removed Math.max(0) to allow negatives
+        const newCount = currentCount + change;
         
         if(newCount !== currentCount) {
              setSessionCounts(prev => ({...prev, [type]: newCount}));
-             // In a real scenario, this would likely update Kaza debt in DB directly
-             // For now we just simulate the UI counter
         }
     };
 
-    // Swipe gesture handlers
     const handleTouchStart = (e: any) => {
         touchStartX.current = e.nativeEvent.pageX;
     };
 
     const handleTouchEnd = (e: any) => {
         const endX = e.nativeEvent.pageX;
-        const minSwipeDistance = 30; // Reduced for better sensitivity
+        const minSwipeDistance = 30;
         const distance = touchStartX.current - endX;
         
         if (Math.abs(distance) > minSwipeDistance) {
             if (distance > 0) {
-                // Swiped left - go to next month
                 setViewDate(addMonths(viewDate, 1));
             } else {
-                // Swiped right - go to previous month
                 setViewDate(subMonths(viewDate, 1));
             }
         }
@@ -261,9 +225,14 @@ export default function HistoryScreen() {
         const end = endOfMonth(viewDate);
         const days = eachDayOfInterval({ start, end });
         
-        // Add empty days for padding at start
         const startDay = getDay(start); // 0 = Sunday
-        const padding = startDay === 0 ? 6 : startDay - 1; // Mon = 0
+        // Adjust for Monday start if locale is TR/EN/AR usually Monday? 
+        // TR starts Monday (1). US starts Sunday (0). AR starts Saturday/Sunday?
+        // Let's assume consistent grid starting Monday for consistency with original code for now.
+        // Original code: startDay === 0 ? 6 : startDay - 1. (Mon=0).
+        // If we want to support locale based start of week, we need more logic.
+        // For simplicity, let's keep it Monday-start as currently implemented visually.
+        const padding = startDay === 0 ? 6 : startDay - 1; 
         const paddedDays = Array(padding).fill(null).concat(days);
 
         return (
@@ -283,7 +252,7 @@ export default function HistoryScreen() {
                         <TouchableOpacity 
                             key={dateStr}
                             onPress={() => !isFutureDate && setSelectedDate(day)}
-                            style={{ width: DAY_SIZE, height: 60 }} // Fixed height for consistent grid
+                            style={{ width: DAY_SIZE, height: 60 }}
                             className={`items-center justify-start py-1 relative ${isSelected ? '' : ''}`}
                             disabled={isFutureDate}
                         >
@@ -313,7 +282,6 @@ export default function HistoryScreen() {
                                         {format(day, 'd')}
                                     </Text>
                                     
-                            {/* Prayer Dots or Fasting Dot */}
                                     <View className="flex-row gap-[2px] mt-1">
                                         {activeTab === 'prayer' ? (
                                              PRAYER_TYPES.map((t, i) => {
@@ -327,7 +295,6 @@ export default function HistoryScreen() {
                                                  );
                                              })
                                         ) : (
-                                             // Fasting: Single Dot
                                              <View className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: monthData[dateStr]?.completed ? '#CD853F' : 'rgba(6, 78, 59, 0.1)' }} />
                                         )}
                                     </View>
@@ -346,20 +313,20 @@ export default function HistoryScreen() {
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-4 py-4 bg-emerald-deep/95 border-b border-white/10">
                     <View className="flex-row items-center gap-4">
-                        <TouchableOpacity onPress={router.back} className="p-2 -ml-2 rounded-full">
+                        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 rounded-full">
                             <ChevronLeft color="#F5F0E1" size={24} />
                         </TouchableOpacity>
-                        <Text className="text-xl font-bold text-beige tracking-tight">Borcu Düzenle</Text>
+                        <Text className="text-xl font-bold text-beige tracking-tight">{t('history.title')}</Text>
                     </View>
                     <TouchableOpacity onPress={handleSave}>
-                        <Text className="text-primary-terracotta font-semibold text-sm">Kaydet</Text>
+                        <Text className="text-primary-terracotta font-semibold text-sm">{t('common.save')}</Text>
                     </TouchableOpacity>
                 </View>
 
                 <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 100 }}>
                     {/* Category Selection */}
                     <View className="px-4 pt-4">
-                        <Text className="text-xs font-semibold text-beige/60 uppercase tracking-widest mb-4 ml-1">KATEGORİ SEÇİMİ</Text>
+                        <Text className="text-xs font-semibold text-beige/60 uppercase tracking-widest mb-4 ml-1">{t('history.category_selection')}</Text>
                         <View className="grid grid-cols-2 flex-row gap-3">
                             <TouchableOpacity 
                                 onPress={() => setActiveTab('prayer')}
@@ -374,12 +341,11 @@ export default function HistoryScreen() {
                                     elevation: activeTab === 'prayer' ? 8 : 0,
                                 }}
                             >
-                                {/* We don't have filled variants in standard Lucide, using normal */}
                                 <View className="rotate-0">
                                      <View className="w-5 h-3 border-2 border-beige rounded-sm mb-[2px]" /> 
                                      <View className="w-3 h-3 bg-beige rounded-full absolute -top-1 left-1" />
                                 </View>
-                                <Text className="font-bold" style={{ color: activeTab === 'prayer' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>Namaz</Text>
+                                <Text className="font-bold" style={{ color: activeTab === 'prayer' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>{t('history.prayer')}</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity 
@@ -396,7 +362,7 @@ export default function HistoryScreen() {
                                 }}
                             >
                                 <MoonStar size={18} color={activeTab === 'fasting' ? "#F5F0E1" : "rgba(245, 240, 225, 0.6)"} />
-                                <Text className="font-bold" style={{ color: activeTab === 'fasting' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>Oruç</Text>
+                                <Text className="font-bold" style={{ color: activeTab === 'fasting' ? '#F5F0E1' : 'rgba(245, 240, 225, 0.6)' }}>{t('history.fasting')}</Text>
                             </TouchableOpacity>
                         </View>
                     </View>
@@ -434,7 +400,7 @@ export default function HistoryScreen() {
                             <ChevronLeft size={24} color="#CD853F" />
                         </TouchableOpacity>
                         <Text className="text-xl font-bold text-beige tracking-tight">
-                            {format(viewDate, 'MMMM yyyy', { locale: tr })}
+                            {format(viewDate, 'MMMM yyyy', { locale: dateLocale })}
                         </Text>
                         <TouchableOpacity onPress={() => setViewDate(addMonths(viewDate, 1))} className="w-10 h-10 items-center justify-center rounded-full bg-emerald-card border border-white/10 shadow-sm">
                             <ChevronRight size={24} color="#CD853F" />
@@ -446,9 +412,9 @@ export default function HistoryScreen() {
                         <View className="bg-beige-calendar rounded-3xl p-4 shadow-xl">
                             {/* Week Days */}
                             <View className="flex-row justify-around mb-4">
-                                {['PZT', 'SAL', 'ÇAR', 'PER', 'CUM', 'CMT', 'PAZ'].map((d, i) => (
+                                {['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((d, i) => (
                                     <Text key={i} style={{ width: DAY_SIZE }} className="text-center text-[10px] font-bold text-emerald-deep/40">
-                                        {d}
+                                        {t(`days.${d}`)}
                                     </Text>
                                 ))}
                             </View>
@@ -465,12 +431,11 @@ export default function HistoryScreen() {
                                      <View className="w-12 h-12 bg-primary-terracotta rounded-full items-center justify-center shadow-md">
                                          <Text className="text-beige font-bold text-lg">{format(selectedDate, 'd')}</Text>
                                      </View>
-                                     <Text className="text-beige font-bold text-lg tracking-tight">{format(selectedDate, 'd MMMM EEEE', { locale: tr })}</Text>
+                                     <Text className="text-beige font-bold text-lg tracking-tight">{format(selectedDate, 'd MMMM EEEE', { locale: dateLocale })}</Text>
                                 </View>
-                                <Text className="text-[10px] font-bold text-primary-terracotta tracking-widest uppercase">SEÇİLİ GÜN</Text>
+                                <Text className="text-[10px] font-bold text-primary-terracotta tracking-widest uppercase">{t('history.selected_day')}</Text>
                             </View>
 
-                            {/* Grid or List based on Tab */}
                             <View>
                                 {activeTab === 'prayer' ? (
                                     <View className="flex-row justify-between gap-3">
@@ -494,12 +459,11 @@ export default function HistoryScreen() {
                                     })}
                                     </View>
                                 ) : (
-                                    // Fasting View - Toggles
                                     <View className="gap-4">
                                         <View className="flex-row items-center justify-between bg-emerald-deep/30 p-4 rounded-2xl border border-white/5">
                                             <View className="flex-row items-center gap-3">
                                                 <Utensils size={20} color="#CD853F" />
-                                                <Text className="text-sm font-semibold text-beige">Oruç Tutuldu</Text>
+                                                <Text className="text-sm font-semibold text-beige">{t('history.fasting_completed')}</Text>
                                             </View>
                                             <Switch 
                                                 value={!!monthData[format(selectedDate, 'yyyy-MM-dd')]?.completed}
@@ -513,7 +477,7 @@ export default function HistoryScreen() {
                                          <View className="flex-row items-center justify-between bg-emerald-deep/30 p-4 rounded-2xl border border-white/5">
                                             <View className="flex-row items-center gap-3">
                                                 <RotateCcw size={20} color="rgba(245, 240, 225, 0.4)" />
-                                                <Text className="text-sm font-semibold text-beige">Kefaret Orucu Tutuldu</Text>
+                                                <Text className="text-sm font-semibold text-beige">{t('history.kefaret_completed')}</Text>
                                             </View>
                                             <Switch 
                                                 value={!!kefaretData[format(selectedDate, 'yyyy-MM-dd')]}
@@ -531,11 +495,11 @@ export default function HistoryScreen() {
 
                     {/* Quick Entry Section */}
                     <View className="px-4 mb-6">
-                        <Text className="text-xs font-semibold text-beige/60 uppercase tracking-widest mb-4 ml-1">HIZLI KAZA GİRİŞİ</Text>
+                        <Text className="text-xs font-semibold text-beige/60 uppercase tracking-widest mb-4 ml-1">{t('history.quick_entry')}</Text>
                         <View className="bg-emerald-card rounded-[2rem] p-5 border border-white/5 gap-4">
                             { (activeTab === 'prayer' ? PRAYER_TYPES : [
-                                {key: 'fasting', label: 'Kaza Orucu'}, 
-                                {key: 'kefaret_fasting', label: 'Kefaret Orucu'}
+                                {key: 'fasting', label: t('history.kaza_fasting')}, 
+                                {key: 'kefaret_fasting', label: t('history.kefaret_fasting')}
                             ]).map((type) => (
                                 <View key={type.key} className="flex-row items-center justify-between bg-emerald-deep/40 rounded-2xl p-3 border border-white/5">
                                     <Text className="text-sm font-semibold text-beige ml-1">{type.label}</Text>
@@ -567,18 +531,17 @@ export default function HistoryScreen() {
                         <View className="bg-primary-terracotta/20 rounded-2xl p-5 border border-primary-terracotta/30 flex-row gap-4 items-start mb-6">
                             <Info size={20} color="#CD853F" style={{ marginTop: 4 }} />
                             <Text className="text-xs leading-relaxed text-beige/90 flex-1">
-                                Hızlı giriş ile borç ekleyebilir (-) veya yanlış girişleri düzeltebilirsiniz (+). Örnek: 5 gün borç eklemek için -5, 5 gün tamamladıysanız +5 girin.
+                                {t('history.info_note_text')}
                             </Text>
                         </View>
                         
                         <Text className="text-xs text-beige/40 text-center leading-relaxed px-4">
-                            Not: Buluğ çağı başlangıç tarihinizi ve diğer hesaplama parametrelerini Profil → Kişisel Bilgiler ekranından düzenleyebilirsiniz.
+                            {t('history.profile_note')}
                         </Text>
                     </View>
 
                 </ScrollView>
                 
-                {/* Custom Alert */}
                 <CustomAlert
                     visible={alertVisible}
                     type={alertConfig.type}

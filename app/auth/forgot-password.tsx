@@ -6,8 +6,10 @@ import { ChevronLeft, Mail } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
 import CustomAlert from '@/components/CustomAlert';
+import { useTranslation } from 'react-i18next';
 
 export default function ForgotPassword() {
+  const { t } = useTranslation();
   const router = useRouter();
   const [email, setEmail] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,7 +38,7 @@ export default function ForgotPassword() {
 
   async function resetPassword() {
     if (!email) {
-        showAlert('Hata', 'Lütfen e-posta adresinizi girin.', 'warning');
+        showAlert(t('common.error'), t('auth.error_enter_email'), 'warning');
         return;
     }
 
@@ -47,9 +49,9 @@ export default function ForgotPassword() {
     });
 
     if (error) {
-        showAlert('Hata', error.message, 'danger');
+        showAlert(t('common.error'), error.message, 'danger');
     } else {
-        showAlert('Başarılı', 'Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.', 'success', () => router.back());
+        showAlert(t('common.success'), t('auth.reset_link_sent'), 'success', () => router.back());
     }
     setLoading(false);
   }
@@ -65,7 +67,7 @@ export default function ForgotPassword() {
             >
                 <ChevronLeft size={24} color="#F5F0E1" />
             </TouchableOpacity>
-            <Text className="text-white font-bold text-xl ml-4 tracking-wide">Şifre Sıfırla</Text>
+            <Text className="text-white font-bold text-xl ml-4 tracking-wide">{t('auth.forgot_pass_title')}</Text>
         </View>
 
         <KeyboardAvoidingView 
@@ -79,9 +81,9 @@ export default function ForgotPassword() {
                      <View className="w-20 h-20 bg-[#ffffff10] rounded-2xl items-center justify-center border border-[#ffffff20] mb-6">
                         <Mail size={32} color="#D2691E" />
                     </View>
-                    <Text className="text-2xl font-bold text-white mb-2 text-center">Şifrenizi mi Unuttunuz?</Text>
+                    <Text className="text-2xl font-bold text-white mb-2 text-center">{t('auth.forgot_pass_header')}</Text>
                     <Text className="text-white/60 text-center px-4">
-                        E-posta adresinizi girin, size şifrenizi sıfırlamanız için bir bağlantı gönderelim.
+                        {t('auth.forgot_pass_desc')}
                     </Text>
                 </View>
 
@@ -90,13 +92,13 @@ export default function ForgotPassword() {
                     
                     {/* Email Input */}
                     <View className="mb-6">
-                        <Text className="text-[#D2691E] font-bold text-xs mb-3 uppercase tracking-wide">E-posta Adresi</Text>
+                        <Text className="text-[#D2691E] font-bold text-xs mb-3 uppercase tracking-wide">{t('auth.email_label')}</Text>
                         <View className="bg-[#1a5f4e] rounded-xl h-14 flex-row items-center px-4 border border-[#ffffff10]">
                             <Mail size={18} color="#D2691E" className="mr-3 opacity-60" />
                             <TextInput
                                 onChangeText={setEmail}
                                 value={email}
-                                placeholder="ornek@farz.com"
+                                placeholder={t('auth.email_placeholder')}
                                 placeholderTextColor="rgba(255, 255, 255, 0.4)"
                                 autoCapitalize="none"
                                 keyboardType="email-address"
@@ -114,7 +116,7 @@ export default function ForgotPassword() {
                         {loading ? (
                             <ActivityIndicator color="#fff" />
                         ) : (
-                            <Text className="text-white font-bold text-lg">Bağlantı Gönder</Text>
+                            <Text className="text-white font-bold text-lg">{t('auth.send_link_button')}</Text>
                         )}
                     </TouchableOpacity>
 
