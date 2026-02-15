@@ -338,10 +338,12 @@ export const getDebtCounts = async () => {
     
     const breakdown: Record<string, number> = {};
     
+    const requiredPrayers = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+
     result.forEach(row => {
         if (row.type === 'fasting') {
             fastingDebt = row.count;
-        } else {
+        } else if (requiredPrayers.includes(row.type)) {
             prayerDebt += row.count;
             breakdown[row.type] = row.count;
         }
