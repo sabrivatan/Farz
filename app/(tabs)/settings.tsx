@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, ScrollView, TouchableOpacity, Switch, Image, Modal, TextInput, Platform, Alert, I18nManager } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useFocusEffect, useLocalSearchParams } from 'expo-router';
@@ -36,6 +36,20 @@ export default function SettingsScreen() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [session, setSession] = useState<Session | null>(null);
     const [isBackingUp, setIsBackingUp] = useState(false);
+    
+    // Load General Notifications Setting
+    useEffect(() => {
+        AsyncStorage.getItem('settings.general_notifications').then(value => {
+            if (value !== null) {
+                setNotificationsEnabled(value === 'true');
+            }
+        });
+    }, []);
+
+    const toggleGeneralNotifications = async (value: boolean) => {
+        setNotificationsEnabled(value);
+        await AsyncStorage.setItem('settings.general_notifications', String(value));
+    };
     
     // Recalculation States
     const [initialProfile, setInitialProfile] = useState<any>(null);
@@ -271,14 +285,34 @@ export default function SettingsScreen() {
         }
     };
 
+    // Load Prayer Reminders
+    useEffect(() => {
+        AsyncStorage.getItem('settings.prayer_reminders').then(value => {
+            if (value) {
+                setPrayerReminders(JSON.parse(value));
+            }
+        });
+    }, []);
+
+    const savePrayerReminders = async (newReminders: typeof prayerReminders) => {
+        setPrayerReminders(newReminders);
+        await AsyncStorage.setItem('settings.prayer_reminders', JSON.stringify(newReminders));
+        
+        // Reschedule notifications with new settings
+        // We need to get current location to reschedule. 
+        // For now, we'll just invalidate. ideally we'd call NotificationService.schedule here if we had location.
+        // It will be rescheduled on next app open or dashboard load.
+    };
+
     const toggleAllPrayerReminders = (enabled: boolean) => {
-        setPrayerReminders({
+        const newReminders = {
             fajr: enabled,
             dhuhr: enabled,
             asr: enabled,
             maghrib: enabled,
             isha: enabled,
-        });
+        };
+        savePrayerReminders(newReminders);
     };
 
     const handleBackup = async () => {
@@ -490,7 +524,7 @@ export default function SettingsScreen() {
                                 </View>
                                 <Switch
                                     value={notificationsEnabled}
-                                    onValueChange={setNotificationsEnabled}
+                                    onValueChange={toggleGeneralNotifications}
                                     trackColor={{ false: 'rgba(0, 0, 0, 0.4)', true: '#CD853F' }}
                                     thumbColor="#FFFFFF"
                                     ios_backgroundColor="rgba(0, 0, 0, 0.4)"

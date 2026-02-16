@@ -7,6 +7,8 @@ import "../lib/i18n"; // Initialize i18n
 import { useEffect } from 'react';
 import mobileAds from '@/lib/admob';
 
+import { registerBackgroundFetchAsync } from '@/services/BackgroundService';
+
 export default function Layout() {
   useEffect(() => {
     try {
@@ -20,6 +22,9 @@ export default function Layout() {
     } catch (e) {
       console.log('AdMob module not found (running in Expo Go?)');
     }
+
+    // Register background fetch task
+    registerBackgroundFetchAsync();
   }, []);
 
   return (

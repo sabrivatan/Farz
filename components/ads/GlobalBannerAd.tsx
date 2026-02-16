@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Platform, Text } from 'react-native';
 import { BannerAd, BannerAdSize, TestIds } from '@/lib/admob';
 
-const adUnitId = 'ca-app-pub-xxxxxxxxxxxxxxxx/xxxxxxxxxx'; // Replace with real ID
+const adUnitId = 'ca-app-pub-2937808553151023/9329672321'; // Real Android Banner ID
 
 export const GlobalBannerAd = () => {
   const [adError, setAdError] = React.useState(false);

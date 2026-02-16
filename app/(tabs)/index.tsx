@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, ScrollView, TouchableOpacity, Dimensions, Image, Platform, Alert } from "react-native";
 import { useRouter, useFocusEffect } from 'expo-router';
 import * as Location from 'expo-location';
@@ -65,6 +66,54 @@ export default function Dashboard() {
       title: string;
       message: string;
   }>({ type: 'info', title: '', message: '' });
+  
+  const [hasUnread, setHasUnread] = useState(false);
+
+  const checkUnreadStatus = async () => {
+      try {
+          // 1. Get Last Read Date
+          const lastReadStr = await AsyncStorage.getItem('last_notification_read_date');
+          const lastRead = lastReadStr ? new Date(lastReadStr) : new Date(0);
+
+          let unreadFound = false;
+
+          // 2. Check General Notifications (from Background Service cache)
+          const latestGeneralStr = await AsyncStorage.getItem('latest_general_notification_date');
+          if (latestGeneralStr) {
+              const latestGeneral = new Date(latestGeneralStr);
+              if (latestGeneral > lastRead) unreadFound = true;
+          }
+
+          // 3. Check Prayer Notifications (Local)
+          // We check if the most recent passed prayer is > lastRead
+          // We can use the 'prayerTimes' state if available, or calc local
+          if (!unreadFound && prayerTimes) {
+               const now = new Date();
+               const passedPrayers = [
+                   prayerTimes.fajr,
+                   prayerTimes.dhuhr, 
+                   prayerTimes.asr,
+                   prayerTimes.maghrib,
+                   prayerTimes.isha
+               ].filter(t => t < now);
+               
+               if (passedPrayers.length > 0) {
+                   const lastPassed = passedPrayers[passedPrayers.length - 1];
+                   if (lastPassed > lastRead) unreadFound = true;
+               }
+          }
+          
+          setHasUnread(unreadFound);
+
+      } catch (e) { console.log('Badge check error', e); }
+  };
+  
+  // Check periodically or on focus
+  useFocusEffect(
+      useCallback(() => {
+          checkUnreadStatus();
+      }, [prayerTimes]) // Re-check when prayerTimes updates (which happens on mount/calc)
+  );
 
   const prayers: { key: PrayerKey; label: string }[] = [
     { key: 'fajr', label: 'fajr' },
@@ -296,8 +345,14 @@ export default function Dashboard() {
                             <Text className="text-white font-bold text-sm">{locationName}</Text>
                         </View>
                     </View>
-                    <TouchableOpacity className="bg-white/10 p-2 rounded-full">
+                    <TouchableOpacity 
+                        onPress={() => router.push('/notifications')}
+                        className="bg-white/10 p-2 rounded-full relative"
+                    >
                         <Bell size={20} color="white" />
+                        {hasUnread && (
+                            <View className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border border-emerald-900" />
+                        )}
                     </TouchableOpacity>
                 </View>
 

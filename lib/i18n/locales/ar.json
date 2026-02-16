@@ -43,7 +43,11 @@
     "fasting": "صيام",
     "unsaved_changes_title": "تغييرات غير محفوظة",
     "unsaved_changes_message": "لديك تغييرات غير محفوظة. هل تريد حفظها قبل المغادرة؟",
-    "discard": "الخروج على أي حال"
+    "discard": "الخروج على أي حال",
+    "just_now": "الآن",
+    "minutes_ago": "دقيقة مضت",
+    "hours_ago": "ساعة مضت",
+    "no_notifications": "لا توجد إشعارات حتى الان."
   },
   "settings": {
       "language": "اللغة",

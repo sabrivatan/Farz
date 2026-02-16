@@ -43,7 +43,11 @@
     "fasting": "Oruç",
     "unsaved_changes_title": "Kaydedilmemiş Değişiklikler",
     "unsaved_changes_message": "Kaydedilmemiş değişiklikleriniz var. Çıkmadan önce kaydetmek ister misiniz?",
-    "discard": "Yine de Çık"
+    "discard": "Yine de Çık",
+    "just_now": "Az önce",
+    "minutes_ago": "dk önce",
+    "hours_ago": "saat önce",
+    "no_notifications": "Henüz bildirim yok."
   },
   "settings": {
       "language": "Dil",
