@@ -30,6 +30,7 @@
     "save": "Save",
     "cancel": "Cancel",
     "confirm": "Confirm",
+    "ok": "OK",
     "days": "Days",
     "settings": "Settings",
     "success": "Success",
@@ -37,8 +38,12 @@
     "error_msg": "Error while saving",
     "reset": "Reset",
     "error_occurred": "Error occurred.",
+    "warning": "Warning",
     "prayer": "Prayer",
-    "fasting": "Fasting"
+    "fasting": "Fasting",
+    "unsaved_changes_title": "Unsaved Changes",
+    "unsaved_changes_message": "You have unsaved changes. Do you want to save them before leaving?",
+    "discard": "Exit Anyway"
   },
   "settings": {
       "language": "Language",
@@ -58,6 +63,7 @@
       "data_safe": "Data Secured ✅",
       "backup_now": "Backup Now",
       "backing_up": "Backing up...",
+    "backup_success": "Backup successful",
       "prayer_reminder_title": "Prayer Reminder",
       "toggle_all_on": "Turn On",
       "toggle_all_off": "Turn Off",
@@ -93,7 +99,9 @@
       "gender": "Gender",
       "male": "Male",
       "female": "Female",
-      "bulugh_date": "Puberty Start Date",
+      "bulugh_date": "Puberty Date",
+      "regular_start_date": "Regular Prayer Start Date",
+      "fasting_start_date": "Regular Fasting Start Date",
       "reset_data_title": "Reset Data",
       "reset_data_confirm": "All your local data (worship records, settings) will be deleted. Unbacked data will be lost. Are you sure?",
       "data_reset_success": "Data reset.",
@@ -104,9 +112,12 @@
       "about_developer": "Developer",
       "prayer_reminder_desc": "Turn on reminders to get notified when prayer times enter.",
       "signup_suggestion": "Sign up to save your data.",
-      "copyright": "© 2024 All rights reserved.",
+      "copyright": "© {{year}} All rights reserved.",
       "active": "Active",
-      "inactive": "Off"
+      "inactive": "Off",
+      "recalc_warning": "Changing this date will recalculate your debts and reset your progress for this category.",
+      "recalc_title": "Recalculate Debts?",
+      "recalc_message": "You have changed the start date. This will recalculate your debts and RESET all existing records for this category. Do you want to continue?"
   },
   "auth": {
       "email_label": "Email Address",

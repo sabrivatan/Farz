@@ -8,28 +8,30 @@ export const SyncService = {
   backupData: async () => {
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      if (!session) return false; // Silent return for local-only users
+      if (!session) return { success: false, message: 'Oturum açılmadı.' }; // Silent return for local-only users
 
       const userId = session.user.id;
       const db = getDb();
 
-      // 1. Profile
-      const profileResult: any = await db.getFirstAsync('SELECT * FROM profile LIMIT 1');
-      if (profileResult) {
-        const { error } = await supabase.from('profiles').upsert({
-          id: userId,
-          name: profileResult.name,
-          surname: profileResult.surname,
-          email: session.user.email, // Ensure email matches auth
-          gender: profileResult.gender,
-          birth_date: profileResult.birth_date,
-          bulugh_date: profileResult.bulugh_date,
-          profile_image: profileResult.profile_image,
-          last_processed_date: profileResult.last_processed_date,
-          updated_at: new Date().toISOString(),
-        });
-        if (error) throw error;
-      }
+          // 1. Profile
+          const profileResult: any = await db.getFirstAsync('SELECT * FROM profile LIMIT 1');
+          if (profileResult) {
+            const { error } = await supabase.from('profiles').upsert({
+              id: userId,
+              name: profileResult.name,
+              surname: profileResult.surname,
+              email: session.user.email, 
+              gender: profileResult.gender,
+              birth_date: profileResult.birth_date,
+              bulugh_date: profileResult.bulugh_date,
+              profile_image: profileResult.profile_image,
+              regular_start_date: profileResult.regular_start_date,
+              fasting_start_date: profileResult.fasting_start_date,
+              last_processed_date: profileResult.last_processed_date,
+              updated_at: new Date().toISOString(),
+            });
+            if (error) throw error;
+          }
 
       // 2. Debt Counts
       const debts: any[] = await db.getAllAsync('SELECT * FROM debt_counts');
@@ -45,13 +47,9 @@ export const SyncService = {
         if (error) throw error;
       }
 
-      // 3. Daily Status (Only last 90 days to save bandwidth? Or all? Let's do all for now)
-      // Chunking might be needed for large datasets, but for now assuming reasonable size.
+      // 3. Daily Status
       const dailyStatus: any[] = await db.getAllAsync('SELECT * FROM daily_status');
       if (dailyStatus.length > 0) {
-         // Supabase has a request size limit, usually 6MB. 
-         // If user has years of data, we might need to batch. 
-         // For now, let's take everything.
          const statusPayload = dailyStatus.map(s => ({
             user_id: userId,
             date: s.date,
@@ -65,11 +63,10 @@ export const SyncService = {
          if (error) throw error;
       }
 
-      return true;
+      return { success: true };
     } catch (error: any) {
       console.error('Backup Error:', error);
-      Alert.alert('Yedekleme Hatası', error.message);
-      return false;
+      return { success: false, message: error.message };
     }
   },
 
@@ -99,15 +96,38 @@ export const SyncService = {
               if (existing) {
                   await db.runAsync(`
                       UPDATE profile SET 
-                        name = ?, surname = ?, gender = ?, birth_date = ?, bulugh_date = ?, profile_image = ?, last_processed_date = ?, email = ?
+                        name = ?, surname = ?, gender = ?, birth_date = ?, bulugh_date = ?, profile_image = ?, regular_start_date = ?, fasting_start_date = ?, last_processed_date = ?, email = ?
                       WHERE id = ?
-                  `, [profile.name, profile.surname, profile.gender, profile.birth_date, profile.bulugh_date, profile.profile_image, profile.last_processed_date, profile.email, existing.id]);
+                  `, [
+                      profile.name || '', 
+                      profile.surname || '', 
+                      profile.gender || 'male', 
+                      profile.birth_date || '', 
+                      profile.bulugh_date || '', 
+                      profile.profile_image || '', 
+                      profile.regular_start_date || '',
+                      profile.fasting_start_date || '',
+                      profile.last_processed_date || new Date().toISOString(), 
+                      profile.email || '', 
+                      existing.id
+                  ]);
               } else {
                   // Create new profile row locally
                   await db.runAsync(`
-                      INSERT INTO profile (name, surname, gender, birth_date, bulugh_date, profile_image, last_processed_date, email)
-                      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                  `, [profile.name, profile.surname, profile.gender, profile.birth_date, profile.bulugh_date, profile.profile_image, profile.last_processed_date, profile.email]);
+                      INSERT INTO profile (name, surname, gender, birth_date, bulugh_date, profile_image, regular_start_date, fasting_start_date, last_processed_date, email)
+                      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                  `, [
+                      profile.name || '', 
+                      profile.surname || '', 
+                      profile.gender || 'male', 
+                      profile.birth_date || '', 
+                      profile.bulugh_date || '', 
+                      profile.profile_image || '', 
+                      profile.regular_start_date || '',
+                      profile.fasting_start_date || '',
+                      profile.last_processed_date || new Date().toISOString(), 
+                      profile.email || ''
+                  ]);
               }
           }
 
@@ -147,11 +167,10 @@ export const SyncService = {
           }
       });
 
-      return true;
+      return { success: true };
     } catch (error: any) {
       console.error('Restore Error:', error);
-      Alert.alert('Geri Yükleme Hatası', error.message);
-      return false;
+      return { success: false, message: error.message };
     }
   }
 };

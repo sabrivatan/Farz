@@ -21,3 +21,28 @@ export const calculateInitialDebtDays = (bulughDate: Date, regularStartDate: Dat
   const days = differenceInDays(regularStartDate, bulughDate);
   return days > 0 ? days : 0;
 };
+
+/**
+ * Calculates prayer debt days based on bulugh date and regular start date.
+ * Formula: Difference in days + 1
+ */
+export const calculatePrayerDebt = (bulughDate: Date, regularStartDate: Date): number => {
+  if (regularStartDate <= bulughDate) return 0;
+  // +1 to include the start date
+  const days = differenceInDays(regularStartDate, bulughDate) + 1;
+  return days > 0 ? days : 0;
+};
+
+/**
+ * Calculates fasting debt days based on bulugh date and regular start date.
+ * Formula: (Years difference) * 30
+ */
+export const calculateFastingDebt = (bulughDate: Date, regularStartDate: Date): number => {
+  if (regularStartDate <= bulughDate) return 0;
+  
+  const oneDay = 24 * 60 * 60 * 1000;
+  const diffTime = Math.abs(regularStartDate.getTime() - bulughDate.getTime());
+  const diffYears = diffTime / (oneDay * 365.25);
+  
+  return Math.floor(diffYears * 30);
+};

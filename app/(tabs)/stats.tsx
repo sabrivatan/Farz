@@ -8,6 +8,7 @@ import { format, addDays, startOfWeek } from 'date-fns';
 import { useTranslation } from 'react-i18next'; // Added
 
 const { width } = Dimensions.get('window');
+import { GlobalBannerAd } from '@/components/ads/GlobalBannerAd';
 
 export default function StatsScreen() {
     const router = useRouter();
@@ -345,7 +346,10 @@ export default function StatsScreen() {
                     </View>
 
                     <View className="h-8" />
+                    <View className="h-8" />
+                    <View className="h-8" />
                 </ScrollView>
+                <GlobalBannerAd />
             </SafeAreaView>
         </View>
     );

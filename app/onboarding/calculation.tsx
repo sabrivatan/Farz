@@ -8,8 +8,11 @@ import { calculateBulughDate, Gender } from "@/lib/calculations";
 import { getDb } from "@/db";
 import { useTranslation } from "react-i18next"; // Added
 
-export default function CalculationForm() {
+import { useInterstitialAd } from '@/hooks/useInterstitialAd';
+
+export default function CalculationScreen() {
   const router = useRouter();
+  const { showAd, loaded } = useInterstitialAd();
   const { t, i18n } = useTranslation(); // Added
   
   // Form state
@@ -136,6 +139,13 @@ export default function CalculationForm() {
         ['fasting', fastingDebtDays]
       );
 
+      // Show Interstitial Ad before navigation
+      if (showAd && loaded) {
+          try {
+            showAd();
+          } catch (e) { console.log('Ad failed', e); }
+      }
+      
       // Navigate to main app
       router.replace("/(tabs)");
       

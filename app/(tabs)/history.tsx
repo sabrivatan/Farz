@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, TextInput, Switch } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, StyleSheet, Dimensions, TextInput, Switch, BackHandler } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter, useFocusEffect } from 'expo-router';
+import { useRouter, useFocusEffect, useNavigation } from 'expo-router';
 import { format, addMonths, subMonths, startOfMonth, endOfMonth, eachDayOfInterval, getDay, isSameDay, getYear, setYear, isFuture } from 'date-fns';
 import { tr, enUS, ar } from 'date-fns/locale';
 import { ChevronLeft, ChevronRight, Check, Minus, Plus, Calendar, RotateCcw, Info, Utensils, Award, MoonStar } from 'lucide-react-native';
@@ -53,12 +53,93 @@ export default function HistoryScreen() {
     
     const touchStartX = useRef<number>(0);
 
+    const navigation = useNavigation();
     const [alertVisible, setAlertVisible] = useState(false);
     const [alertConfig, setAlertConfig] = useState<{
         type: 'success' | 'danger' | 'info' | 'warning';
         title: string;
         message: string;
+        confirmText?: string;
+        cancelText?: string;
+        discardText?: string;
+        showCancel?: boolean;
+        onConfirm?: () => void;
+        onCancel?: () => void;
+        onDiscard?: () => void;
     }>({ type: 'info', title: '', message: '' });
+
+    const hasUnsavedChanges = useMemo(() => {
+        const hasSessionChanges = Object.values(sessionCounts).some(count => count !== 0);
+        const hasMapChanges = unsavedChanges.size > 0;
+        return hasSessionChanges || hasMapChanges;
+    }, [sessionCounts, unsavedChanges]);
+
+    useFocusEffect(
+        React.useCallback(() => {
+            const onBackPress = () => {
+                if (hasUnsavedChanges) {
+                    setAlertConfig({
+                        type: 'warning',
+                        title: t('common.unsaved_changes_title'),
+                        message: t('common.unsaved_changes_message'),
+                        confirmText: t('common.save'),
+                        cancelText: t('common.cancel'),
+                        discardText: t('common.discard'),
+                        showCancel: true,
+                        onConfirm: () => {
+                            setAlertVisible(false);
+                            handleSave(true); // Indicate we want to go back after save
+                        },
+                        onCancel: () => {
+                            setAlertVisible(false);
+                        },
+                        onDiscard: () => {
+                            setAlertVisible(false);
+                            setUnsavedChanges(new Map());
+                            setSessionCounts({});
+                            router.back();
+                        }
+                    });
+                    setAlertVisible(true);
+                    return true; // Prevent default behavior
+                }
+                return false;
+            };
+
+            const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+            return () => subscription.remove();
+        }, [hasUnsavedChanges, sessionCounts, unsavedChanges])
+    );
+
+    const handleBack = () => {
+        if (hasUnsavedChanges) {
+             setAlertConfig({
+                type: 'warning',
+                title: t('common.unsaved_changes_title'),
+                message: t('common.unsaved_changes_message'),
+                confirmText: t('common.save'),
+                cancelText: t('common.cancel'),
+                discardText: t('common.discard'),
+                showCancel: true,
+                onConfirm: () => {
+                    setAlertVisible(false);
+                    handleSave(true);
+                },
+                onCancel: () => {
+                    setAlertVisible(false);
+                },
+                onDiscard: () => {
+                    setAlertVisible(false);
+                    setUnsavedChanges(new Map());
+                    setSessionCounts({});
+                    router.back();
+                }
+            });
+            setAlertVisible(true);
+        } else {
+            router.back();
+        }
+    };
 
     const currentYear = getYear(new Date());
     const years = Array.from({ length: 5 }, (_, i) => currentYear - 2 + i);
@@ -149,7 +230,7 @@ export default function HistoryScreen() {
         });
     };
 
-    const handleSave = async () => {
+    const handleSave = async (shouldGoBack = false) => {
         try {
             for (const [key, value] of unsavedChanges) {
                 if (key.endsWith('-note')) continue;
@@ -179,7 +260,13 @@ export default function HistoryScreen() {
             setAlertConfig({
                 type: 'success',
                 title: t('common.success'),
-                message: t('common.saved_msg')
+                message: t('common.saved_msg'),
+                onConfirm: () => {
+                    setAlertVisible(false);
+                    if (shouldGoBack) {
+                        router.back();
+                    }
+                }
             });
             setAlertVisible(true);
         } catch (e) {
@@ -313,12 +400,12 @@ export default function HistoryScreen() {
                 {/* Header */}
                 <View className="flex-row items-center justify-between px-4 py-4 bg-emerald-deep/95 border-b border-white/10">
                     <View className="flex-row items-center gap-4">
-                        <TouchableOpacity onPress={() => router.back()} className="p-2 -ml-2 rounded-full">
+                        <TouchableOpacity onPress={handleBack} className="p-2 -ml-2 rounded-full">
                             <ChevronLeft color="#F5F0E1" size={24} />
                         </TouchableOpacity>
                         <Text className="text-xl font-bold text-beige tracking-tight">{t('history.title')}</Text>
                     </View>
-                    <TouchableOpacity onPress={handleSave}>
+                    <TouchableOpacity onPress={() => handleSave()}>
                         <Text className="text-primary-terracotta font-semibold text-sm">{t('common.save')}</Text>
                     </TouchableOpacity>
                 </View>
@@ -544,10 +631,8 @@ export default function HistoryScreen() {
                 
                 <CustomAlert
                     visible={alertVisible}
-                    type={alertConfig.type}
-                    title={alertConfig.title}
-                    message={alertConfig.message}
-                    onConfirm={() => setAlertVisible(false)}
+                    {...alertConfig}
+                    onConfirm={alertConfig.onConfirm || (() => setAlertVisible(false))}
                 />
             </SafeAreaView>
         </View>

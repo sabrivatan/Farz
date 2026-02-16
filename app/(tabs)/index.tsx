@@ -40,6 +40,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type PrayerKey = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 
 import CustomAlert from '@/components/CustomAlert';
+import { GlobalBannerAd } from '@/components/ads/GlobalBannerAd';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -497,6 +498,9 @@ export default function Dashboard() {
             </View>
 
         </ScrollView>
+        
+        <GlobalBannerAd />
+
         <CustomAlert
             visible={alertVisible}
             type={alertConfig.type}

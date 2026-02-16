@@ -30,6 +30,7 @@
     "save": "Kaydet",
     "cancel": "İptal",
     "confirm": "Onayla",
+    "ok": "Tamam",
     "days": "Gün",
     "settings": "Ayarlar",
     "success": "Başarılı",
@@ -37,8 +38,12 @@
     "error_msg": "Kaydetme sırasında bir hata oluştu",
     "reset": "Sıfırla",
     "error_occurred": "Hata oluştu.",
+    "warning": "Uyarı",
     "prayer": "Namaz",
-    "fasting": "Oruç"
+    "fasting": "Oruç",
+    "unsaved_changes_title": "Kaydedilmemiş Değişiklikler",
+    "unsaved_changes_message": "Kaydedilmemiş değişiklikleriniz var. Çıkmadan önce kaydetmek ister misiniz?",
+    "discard": "Yine de Çık"
   },
   "settings": {
       "language": "Dil",
@@ -58,6 +63,7 @@
       "data_safe": "Verileriniz Güvende ✅",
       "backup_now": "Şimdi Yedekle",
       "backing_up": "Yedekleniyor...",
+    "backup_success": "Yedekleme başarılı",
       "prayer_reminder_title": "Vakit Hatırlatıcı",
       "toggle_all_on": "Aç",
       "toggle_all_off": "Kapat",
@@ -94,6 +100,8 @@
       "male": "Erkek",
       "female": "Kadın",
       "bulugh_date": "Buluğ Çağı Başlangıcı",
+      "regular_start_date": "Düzenli Namaz Başlangıcı",
+      "fasting_start_date": "Düzenli Oruç Başlangıcı",
       "reset_data_title": "Verileri Sıfırla",
       "reset_data_confirm": "Tüm yerel verileriniz (ibadet kayıtları, ayarlar) silinecek. Yedeklenmemiş veriler kaybolur. Emin misiniz?",
       "data_reset_success": "Veriler sıfırlandı.",
@@ -104,9 +112,12 @@
       "about_developer": "Geliştirici",
       "prayer_reminder_desc": "Vakitler girdiğinde bildirim almak için hatırlatıcıları açın.",
       "signup_suggestion": "Üye ol, verilerin kaybolmasın.",
-      "copyright": "© 2024 Tüm hakları saklıdır.",
+      "copyright": "© {{year}} Tüm hakları saklıdır.",
       "active": "Aktif",
-      "inactive": "Kapalı"
+      "inactive": "Kapalı",
+      "recalc_warning": "Bu tarihi değiştirmek, mevcut kaza borçlarınızı yeniden hesaplayacak ve bu kategori için girdiğiniz kaza kayıtlarını sıfırlayacaktır.",
+      "recalc_title": "Borçları Yeniden Hesapla?",
+      "recalc_message": "Başlangıç tarihini değiştirdiniz. Bu işlem, borçlarınızı yeniden hesaplayacak ve bu kategori için mevcut tüm kaza kayıtlarınızı SIFIRLAYACAKTIR. Devam etmek istiyor musunuz?"
   },
   "auth": {
       "email_label": "E-posta Adresi",

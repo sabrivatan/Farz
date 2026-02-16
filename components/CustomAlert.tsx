@@ -13,8 +13,10 @@ type CustomAlertProps = {
     cancelText?: string;
     onConfirm?: () => void;
     onCancel?: () => void;
+    onDiscard?: () => void;
     type?: 'info' | 'danger' | 'success' | 'warning'; 
     showCancel?: boolean;
+    discardText?: string;
 };
 
 export default function CustomAlert({
@@ -23,14 +25,18 @@ export default function CustomAlert({
     message,
     confirmText,
     cancelText,
+    discardText,
     onConfirm,
     onCancel,
+    onDiscard,
     type = 'info',
     showCancel = false,
 }: CustomAlertProps) {
     const { t } = useTranslation();
-    const finalConfirmText = confirmText || t('common.confirm'); // or 'common.ok' if you have it
+    const finalConfirmText = confirmText || t('common.confirm');
     const finalCancelText = cancelText || t('common.cancel');
+    const finalDiscardText = discardText || t('common.discard');
+
     if (!visible) return null;
 
     const getIcon = () => {
@@ -85,28 +91,65 @@ export default function CustomAlert({
                     <Text style={styles.message}>{message}</Text>
 
                     {/* Actions */}
-                    <View style={styles.actions}>
-                        {showCancel && (
+                    {/* Actions */}
+                    {onDiscard ? (
+                        <View style={{ width: '100%', gap: 12 }}>
+                            <View style={{ flexDirection: 'row', gap: 12 }}>
+                                <TouchableOpacity 
+                                    style={[styles.button, styles.discardButton]} 
+                                    onPress={onDiscard}
+                                >
+                                    <Text style={styles.discardButtonText}>{finalDiscardText}</Text>
+                                </TouchableOpacity>
+
+                                <TouchableOpacity 
+                                    style={[
+                                        styles.button, 
+                                        styles.confirmButton,
+                                        { backgroundColor: type === 'danger' ? '#EF4444' : '#CD853F' },
+                                        { shadowColor: type === 'danger' ? '#EF4444' : '#CD853F' },
+                                        { flex: 1.5 } // Give Save more weight
+                                    ]} 
+                                    onPress={onConfirm}
+                                >
+                                    <Text style={styles.confirmButtonText}>{finalConfirmText}</Text>
+                                </TouchableOpacity>
+                            </View>
+                            
+                            {showCancel && (
+                                <TouchableOpacity 
+                                    style={[styles.button, styles.cancelButton, { width: '100%', flex: 0 }]} 
+                                    onPress={onCancel}
+                                >
+                                    <Text style={styles.cancelButtonText}>{finalCancelText}</Text>
+                                </TouchableOpacity>
+                            )}
+                        </View>
+                    ) : (
+                        <View style={styles.actions}>
+                            {showCancel && (
+                                <TouchableOpacity 
+                                    style={[styles.button, styles.cancelButton]} 
+                                    onPress={onCancel}
+                                >
+                                    <Text style={styles.cancelButtonText}>{finalCancelText}</Text>
+                                </TouchableOpacity>
+                            )}
+
                             <TouchableOpacity 
-                                style={[styles.button, styles.cancelButton]} 
-                                onPress={onCancel}
+                                style={[
+                                    styles.button, 
+                                    styles.confirmButton,
+                                    { backgroundColor: type === 'danger' ? '#EF4444' : '#CD853F' },
+                                    { shadowColor: type === 'danger' ? '#EF4444' : '#CD853F' },
+                                    showCancel && { flex: 1 }
+                                ]} 
+                                onPress={onConfirm}
                             >
-                                <Text style={styles.cancelButtonText}>{finalCancelText}</Text>
+                                <Text style={styles.confirmButtonText}>{finalConfirmText}</Text>
                             </TouchableOpacity>
-                        )}
-                        <TouchableOpacity 
-                            style={[
-                                styles.button, 
-                                styles.confirmButton,
-                                { backgroundColor: type === 'danger' ? '#EF4444' : '#CD853F' },
-                                { shadowColor: type === 'danger' ? '#EF4444' : '#CD853F' },
-                                showCancel && { flex: 1 }
-                            ]} 
-                            onPress={onConfirm}
-                        >
-                            <Text style={styles.confirmButtonText}>{finalConfirmText}</Text>
-                        </TouchableOpacity>
-                    </View>
+                        </View>
+                    )}
                 </View>
             </View>
         </Modal>
@@ -190,6 +233,17 @@ const styles = StyleSheet.create({
     },
     cancelButtonText: {
         color: 'rgba(245, 240, 225, 0.7)', 
+        fontWeight: '600',
+        fontSize: 15,
+    },
+    discardButton: {
+        backgroundColor: '#000000',
+        borderWidth: 1,
+        borderColor: '#333333',
+        flex: 1,
+    },
+    discardButtonText: {
+        color: '#FFFFFF', 
         fontWeight: '600',
         fontSize: 15,
     },

@@ -17,6 +17,8 @@ import { SyncService } from '@/services/SyncService';
 import { useTranslation } from 'react-i18next';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomAlert from '@/components/CustomAlert';
+import { calculatePrayerDebt, calculateFastingDebt } from '@/lib/calculations';
+import { differenceInDays } from 'date-fns';
 
 const PRAYER_TIMES = [
     { key: 'fajr', label: 'Sabah' },
@@ -34,6 +36,11 @@ export default function SettingsScreen() {
     const [notificationsEnabled, setNotificationsEnabled] = useState(true);
     const [session, setSession] = useState<Session | null>(null);
     const [isBackingUp, setIsBackingUp] = useState(false);
+    
+    // Recalculation States
+    const [initialProfile, setInitialProfile] = useState<any>(null);
+    const [recalcAlertVisible, setRecalcAlertVisible] = useState(false);
+    const [changesToRecalc, setChangesToRecalc] = useState<{prayer: boolean, fasting: boolean}>({ prayer: false, fasting: false });
 
     // Profile Edit Modal
     const [profileModalVisible, setProfileModalVisible] = useState(false);
@@ -44,12 +51,16 @@ export default function SettingsScreen() {
         birthDate: '',
         gender: 'male',
         bulughDate: '',
+        regularStartDate: '',
+        fastingStartDate: '',
         profileImage: '',
     });
 
     // Date Pickers
     const [showBirthDatePicker, setShowBirthDatePicker] = useState(false);
     const [showBulughDatePicker, setShowBulughDatePicker] = useState(false);
+    const [showRegularStartDatePicker, setShowRegularStartDatePicker] = useState(false);
+    const [showFastingStartDatePicker, setShowFastingStartDatePicker] = useState(false);
     
     // Language Modal
     const [languageModalVisible, setLanguageModalVisible] = useState(false);
@@ -72,10 +83,25 @@ export default function SettingsScreen() {
     const [resetDataAlertVisible, setResetDataAlertVisible] = useState(false);
     const [logoutAlertVisible, setLogoutAlertVisible] = useState(false);
 
+    const [statusAlert, setStatusAlert] = useState<{
+        visible: boolean;
+        title: string;
+        message: string;
+        type: 'success' | 'danger' | 'warning' | 'info';
+    }>({
+        visible: false,
+        title: '',
+        message: '',
+        type: 'info',
+    });
+
     const handlePickImage = async () => {
-        // No permissions request is necessary for launching the image library
+        const mediaTypes = (ImagePicker as any).MediaType 
+            ? (ImagePicker as any).MediaType.Images 
+            : ImagePicker.MediaTypeOptions.Images;
+
         let result = await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ImagePicker.MediaTypeOptions.Images,
+            mediaTypes,
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.5,
@@ -88,42 +114,13 @@ export default function SettingsScreen() {
 
     const changeLanguage = async (lang: string) => {
         try {
-            const currentLang = i18n.language;
-            if (currentLang === lang) return;
-
-            await AsyncStorage.setItem('user-language', lang);
             await i18n.changeLanguage(lang);
-
-            const isRTL = lang === 'ar';
-            if (I18nManager.isRTL !== isRTL) {
-                I18nManager.allowRTL(isRTL);
-                I18nManager.forceRTL(isRTL);
-                Alert.alert(
-                    t('common.settings'),
-                    t('settings.restart_required'),
-                );
-            }
+            await AsyncStorage.setItem('user-language', lang);
+            I18nManager.forceRTL(lang === 'ar');
         } catch (error) {
-            console.error('Language change error', error);
+            console.error('Error changing language:', error);
         }
     };
-
-    useFocusEffect(
-        useCallback(() => {
-            fetchProfile();
-            supabase.auth.getSession().then(({ data: { session } }) => {
-                setSession(session);
-            });
-
-            // Check for navigation params to open modals
-            if (params.action === 'openPrayerReminders') {
-                setPrayerReminderModalVisible(true);
-                router.setParams({ action: '' }); // Clear param
-            }
-        }, [params.action])
-    );
-
-
 
     const fetchProfile = async () => {
         try {
@@ -139,7 +136,13 @@ export default function SettingsScreen() {
                     birthDate: result.birth_date || '',
                     gender: result.gender || 'male',
                     bulughDate: result.bulugh_date || '',
+                    regularStartDate: result.regular_start_date || '',
+                    fastingStartDate: result.fasting_start_date || '',
                     profileImage: result.profile_image || '',
+                });
+                setInitialProfile({
+                    regularStartDate: result.regular_start_date || '',
+                    fastingStartDate: result.fasting_start_date || '',
                 });
             }
         } catch (error) {
@@ -147,10 +150,22 @@ export default function SettingsScreen() {
         }
     };
 
-    const handleSaveProfile = async () => {
+    useFocusEffect(
+        useCallback(() => {
+            fetchProfile();
+            
+            AsyncStorage.getItem('user-language').then(lang => {
+                if (lang) {
+                    i18n.changeLanguage(lang);
+                }
+            });
+        }, [])
+    );
+
+    const processSaveProfile = async (shouldRecalc: boolean) => {
         try {
             const db = getDb();
-            console.log('Saving profile:', editedProfile); // Debug log
+            console.log('Saving profile:', editedProfile);
             
             // Check if profile exists
             const existing: any = await db.getFirstAsync('SELECT id FROM profile LIMIT 1');
@@ -164,6 +179,8 @@ export default function SettingsScreen() {
                         birth_date = ?, 
                         gender = ?, 
                         bulugh_date = ?,
+                        regular_start_date = ?,
+                        fasting_start_date = ?,
                         profile_image = ?
                     WHERE id = ?`,
                     [
@@ -173,15 +190,16 @@ export default function SettingsScreen() {
                         editedProfile.birthDate, 
                         editedProfile.gender, 
                         editedProfile.bulughDate, 
+                        editedProfile.regularStartDate,
+                        editedProfile.fastingStartDate,
                         editedProfile.profileImage,
                         existing.id
                     ]
                 );
             } else {
-                // Should not happen if onboarding created it, but safe fallback
                 await db.runAsync(
-                    `INSERT INTO profile (name, surname, email, birth_date, gender, bulugh_date, profile_image) 
-                    VALUES (?, ?, ?, ?, ?, ?, ?)`,
+                    `INSERT INTO profile (name, surname, email, birth_date, gender, bulugh_date, regular_start_date, fasting_start_date, profile_image) 
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
                     [
                         editedProfile.name, 
                         editedProfile.surname, 
@@ -189,9 +207,47 @@ export default function SettingsScreen() {
                         editedProfile.birthDate, 
                         editedProfile.gender, 
                         editedProfile.bulughDate, 
+                        editedProfile.regularStartDate,
+                        editedProfile.fastingStartDate,
                         editedProfile.profileImage
                     ]
                 );
+            }
+            
+            // Recalculation Logic
+            if (shouldRecalc) {
+                const bulughDate = new Date(editedProfile.bulughDate);
+                
+                if (changesToRecalc.prayer) {
+                    const regularStartDate = new Date(editedProfile.regularStartDate);
+                    const newPrayerDebt = calculatePrayerDebt(bulughDate, regularStartDate);
+                    
+                    // Reset Prayer Progress
+                    await db.runAsync(`DELETE FROM daily_status WHERE type IN ('fajr', 'dhuhr', 'asr', 'maghrib', 'isha')`);
+                    
+                    // Update Prayer Debts
+                    const prayerTypes = ['fajr', 'dhuhr', 'asr', 'maghrib', 'isha'];
+                    for (const type of prayerTypes) {
+                        await db.runAsync(
+                            'INSERT OR REPLACE INTO debt_counts (type, count) VALUES (?, ?)',
+                            [type, newPrayerDebt]
+                        );
+                    }
+                }
+                
+                if (changesToRecalc.fasting) {
+                    const fastingStartDate = new Date(editedProfile.fastingStartDate);
+                    const newFastingDebt = calculateFastingDebt(bulughDate, fastingStartDate);
+                    
+                    // Reset Fasting Progress
+                    await db.runAsync(`DELETE FROM daily_status WHERE type = 'fasting'`);
+                    
+                    // Update Fasting Debt
+                    await db.runAsync(
+                        'INSERT OR REPLACE INTO debt_counts (type, count) VALUES (?, ?)',
+                        ['fasting', newFastingDebt]
+                    );
+                }
             }
             
             await fetchProfile();
@@ -200,6 +256,18 @@ export default function SettingsScreen() {
             SyncService.backupData();
         } catch (error) {
             console.error('Error saving profile:', error);
+        }
+    };
+
+    const handleSaveProfile = async () => {
+        const prayerChanged = initialProfile?.regularStartDate !== editedProfile.regularStartDate;
+        const fastingChanged = initialProfile?.fastingStartDate !== editedProfile.fastingStartDate;
+        
+        if (prayerChanged || fastingChanged) {
+            setChangesToRecalc({ prayer: prayerChanged, fasting: fastingChanged });
+            setRecalcAlertVisible(true);
+        } else {
+            processSaveProfile(false);
         }
     };
 
@@ -215,10 +283,23 @@ export default function SettingsScreen() {
 
     const handleBackup = async () => {
         setIsBackingUp(true);
-        const success = await SyncService.backupData();
+        const result = await SyncService.backupData();
         setIsBackingUp(false);
-        if (success) {
-            alert('Yedekleme Başarılı!');
+        
+        if (result.success) {
+            setStatusAlert({
+                visible: true,
+                title: t('common.success'),
+                message: t('settings.backup_success'),
+                type: 'success',
+            });
+        } else {
+            setStatusAlert({
+                visible: true,
+                title: t('common.error'),
+                message: result.message || t('common.error_occurred'),
+                type: 'danger',
+            });
         }
     };
 
@@ -504,7 +585,7 @@ export default function SettingsScreen() {
 
                     {/* Version */}
                     <View className="items-center pb-8 mt-4">
-                        <Text className="text-[10px] text-beige/30">Farz v2.4.0 (2024)</Text>
+                        <Text className="text-[10px] text-beige/30">Farz v1.0.0 ({new Date().getFullYear()})</Text>
                     </View>
                 </ScrollView>
             </SafeAreaView>
@@ -667,6 +748,64 @@ export default function SettingsScreen() {
                                 )}
                             </View>
 
+                            {/* Düzenli Namaz Başlangıcı */}
+                            <View className="mb-4">
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">{t('settings.regular_start_date')}</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowRegularStartDatePicker(true)}
+                                    className="bg-emerald-card border border-white/10 rounded-xl p-4"
+                                >
+                                    <Text className="text-beige">
+                                        {editedProfile.regularStartDate ? format(new Date(editedProfile.regularStartDate), 'd MMMM yyyy', { locale: tr }) : t('settings.select_date')}
+                                    </Text>
+                                </TouchableOpacity>
+                                {showRegularStartDatePicker && (
+                                    <DateTimePicker
+                                        value={editedProfile.regularStartDate ? new Date(editedProfile.regularStartDate) : new Date()}
+                                        mode="date"
+                                        display="default"
+                                        onChange={(event, selectedDate) => {
+                                            setShowRegularStartDatePicker(Platform.OS === 'ios');
+                                            if (selectedDate) {
+                                                setEditedProfile({ ...editedProfile, regularStartDate: selectedDate.toISOString().split('T')[0] });
+                                            }
+                                        }}
+                                    />
+                                )}
+                                <Text className="text-orange-400/80 text-[10px] mt-2 leading-tight">
+                                    {t('settings.recalc_warning')}
+                                </Text>
+                            </View>
+
+                            {/* Düzenli Oruç Başlangıcı */}
+                            <View className="mb-6">
+                                <Text className="text-xs font-semibold text-beige/60 uppercase mb-2">{t('settings.fasting_start_date')}</Text>
+                                <TouchableOpacity
+                                    onPress={() => setShowFastingStartDatePicker(true)}
+                                    className="bg-emerald-card border border-white/10 rounded-xl p-4"
+                                >
+                                    <Text className="text-beige">
+                                        {editedProfile.fastingStartDate ? format(new Date(editedProfile.fastingStartDate), 'd MMMM yyyy', { locale: tr }) : t('settings.select_date')}
+                                    </Text>
+                                </TouchableOpacity>
+                                {showFastingStartDatePicker && (
+                                    <DateTimePicker
+                                        value={editedProfile.fastingStartDate ? new Date(editedProfile.fastingStartDate) : new Date()}
+                                        mode="date"
+                                        display="default"
+                                        onChange={(event, selectedDate) => {
+                                            setShowFastingStartDatePicker(Platform.OS === 'ios');
+                                            if (selectedDate) {
+                                                setEditedProfile({ ...editedProfile, fastingStartDate: selectedDate.toISOString().split('T')[0] });
+                                            }
+                                        }}
+                                    />
+                                )}
+                                <Text className="text-orange-400/80 text-[10px] mt-2 leading-tight">
+                                    {t('settings.recalc_warning')}
+                                </Text>
+                            </View>
+
                             {/* Save Button */}
                             <TouchableOpacity
                                 onPress={handleSaveProfile}
@@ -792,8 +931,8 @@ export default function SettingsScreen() {
 
                                 <View className="pt-4 border-t border-white/10">
                                     <Text className="text-xs text-beige/50 text-center">
-                                        Farz v2.4.0 (2024){"\n"}
-                                        {t('settings.copyright')}
+                                        Farz v1.0.0 ({new Date().getFullYear()}){"\n"}
+                                        {t('settings.copyright', { year: new Date().getFullYear() })}
                                     </Text>
                                 </View>
                             </View>
@@ -934,6 +1073,36 @@ export default function SettingsScreen() {
                 onConfirm={confirmLogout}
                 onCancel={() => setLogoutAlertVisible(false)}
                 type="danger"
+                showCancel={true}
+            />
+
+            {/* General Status Alert */}
+            <CustomAlert
+                visible={statusAlert.visible}
+                title={statusAlert.title}
+                message={statusAlert.message}
+                confirmText={t('common.confirm')} 
+                onConfirm={() => setStatusAlert({ ...statusAlert, visible: false })}
+                onCancel={() => setStatusAlert({ ...statusAlert, visible: false })}
+                type={statusAlert.type}
+                showCancel={false}
+            />
+
+            {/* Recalculation Alert */}
+            <CustomAlert
+                visible={recalcAlertVisible}
+                title={t('settings.recalc_title')}
+                message={t('settings.recalc_message')}
+                confirmText={t('common.confirm')}
+                cancelText={t('common.cancel')}
+                onConfirm={() => {
+                    setRecalcAlertVisible(false);
+                    processSaveProfile(true);
+                }}
+                onCancel={() => {
+                    setRecalcAlertVisible(false);
+                }}
+                type="warning"
                 showCancel={true}
             />
         </View>
