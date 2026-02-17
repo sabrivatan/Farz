@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView, Platform, StyleSheet, Alert } from "react-native";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ChevronLeft, Calculator, Calendar, Info, ArrowRight } from "lucide-react-native";
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { calculateBulughDate, Gender } from "@/lib/calculations";
@@ -12,6 +12,7 @@ import { useInterstitialAd } from '@/hooks/useInterstitialAd';
 
 export default function CalculationScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets(); // Get safe area insets
   const { showAd, loaded } = useInterstitialAd();
   const { t, i18n } = useTranslation(); // Added
   
@@ -271,7 +272,10 @@ export default function CalculationScreen() {
       </ScrollView>
 
       {/* Floating Action Button */}
-      <View className="absolute bottom-0 left-0 right-0 p-6 bg-emerald-deep border-t border-emerald-800 shadow-xl">
+      <View 
+        className="absolute bottom-0 left-0 right-0 p-6 bg-emerald-deep border-t border-emerald-800 shadow-xl"
+        style={{ paddingBottom: Math.max(insets.bottom, 20) + 10 }}
+      >
         <TouchableOpacity
             onPress={handleCalculate}
             disabled={!isValid}

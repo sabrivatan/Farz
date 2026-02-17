@@ -1,9 +1,12 @@
 import { Tabs } from "expo-router";
 import { Home, Calendar, BarChart2, User } from "lucide-react-native";
 import { useEffect } from "react";
+import { useSafeAreaInsets } from "react-native-safe-area-context"; // Import hook
 import { checkDailyLoop } from "@/db";
 
 export default function TabLayout() {
+  const insets = useSafeAreaInsets(); // Get safe area insets
+
   useEffect(() => {
     checkDailyLoop();
   }, []);
@@ -16,8 +19,8 @@ export default function TabLayout() {
             backgroundColor: '#064e3b',
             borderTopWidth: 0,
             elevation: 0,
-            height: 80,
-            paddingBottom: 20,
+            height: 60 + insets.bottom, // Dynamic height: 60px base + safe area
+            paddingBottom: insets.bottom, // Dynamic padding
             paddingTop: 10,
             shadowColor: "#000",
             shadowOffset: {

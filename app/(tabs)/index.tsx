@@ -41,7 +41,6 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type PrayerKey = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 
 import CustomAlert from '@/components/CustomAlert';
-import { GlobalBannerAd } from '@/components/ads/GlobalBannerAd';
 
 export default function Dashboard() {
   const router = useRouter();
@@ -330,7 +329,7 @@ export default function Dashboard() {
   const PRAYER_ITEM_WIDTH = (SCREEN_WIDTH - 48) / 5;
 
   return (
-    <View className="flex-1 bg-background-light dark:bg-slate-900">
+    <View className="flex-1 bg-[#F8FAFC]">
         {/* HEADER SECTION (Curved) */}
         <View className="bg-emerald-deep pb-24 relative z-10">
             <SafeAreaView edges={['top']}>
@@ -493,17 +492,17 @@ export default function Dashboard() {
             <View className="px-6 mb-8 mt-4">
                  <View className="bg-emerald-deep/80 p-5 rounded-[2rem] border border-white/5 shadow-xl backdrop-blur-md">
                     <View className="flex-row items-center justify-between mb-6">
-                         <View className="flex-row items-center gap-3">
-                             <View className="w-10 h-10 bg-primary-terracotta rounded-full items-center justify-center shadow-md">
-                                 <Text className="text-beige font-bold text-base">{effDate.getDate()}</Text>
-                             </View>
-                             <View>
-                                 <Text className="text-beige font-bold text-lg tracking-tight">{t('dashboard.title')}</Text>
-                                 <Text className="text-emerald-100/60 text-xs font-medium uppercase tracking-wider">
-                                   {effDate.toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
-                                 </Text>
-                             </View>
-                         </View>
+                        <View className="flex-row items-center gap-3">
+                            <View className="w-10 h-10 bg-primary-terracotta rounded-full items-center justify-center">
+                                <Text className="text-white font-bold text-lg">{new Date().getDate()}</Text>
+                            </View>
+                            <View>
+                                <Text className="text-white font-bold text-lg">{t('dashboard.todays_worship')}</Text>
+                                <Text className="text-emerald-100/60 text-xs uppercase tracking-wider">
+                                    {new Date().toLocaleDateString('tr-TR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                                </Text>
+                            </View>
+                        </View>
                          {/* Info Icon and Debt Info for Debt Calculation */}
                          {debts.totalPrayer > 0 && (
                             <TouchableOpacity 
@@ -554,7 +553,7 @@ export default function Dashboard() {
 
         </ScrollView>
         
-        <GlobalBannerAd />
+
 
         <CustomAlert
             visible={alertVisible}

@@ -1,6 +1,7 @@
 {
   "dashboard": {
     "title": "Bugünün İbadetleri",
+    "todays_worship": "Bugünün İbadetleri",
     "quick_access": "Hızlı Erişim",
     "missed_prayer": "Kaza Namazı",
     "missed_fasting": "Kaza Orucu",

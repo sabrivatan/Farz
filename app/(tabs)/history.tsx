@@ -8,6 +8,7 @@ import { ChevronLeft, ChevronRight, Check, Minus, Plus, Calendar, RotateCcw, Inf
 import { getDailyStatus, toggleDailyStatus, getMonthlyStats, initDB, quickUpdateKaza } from '../../db';
 import { SyncService } from '@/services/SyncService';
 import CustomAlert from '../../components/CustomAlert';
+import { GlobalBannerAd } from '@/components/ads/GlobalBannerAd';
 import { useTranslation } from 'react-i18next';
 
 const SCREEN_WIDTH = Dimensions.get('window').width;
@@ -629,6 +630,11 @@ export default function HistoryScreen() {
 
                 </ScrollView>
                 
+                {/* Banner Ad */}
+                <View className="items-center pb-4">
+                    <GlobalBannerAd />
+                </View>
+
                 <CustomAlert
                     visible={alertVisible}
                     {...alertConfig}

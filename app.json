@@ -2,7 +2,7 @@
   "expo": {
     "name": "Farz",
     "slug": "Farz",
-    "version": "1.0.0",
+    "version": "1.0.1",
     "scheme": "farz",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#064e3b"
     },
     "ios": {
       "supportsTablet": true,
@@ -20,16 +20,25 @@
           "fetch"
         ]
       },
-      "bundleIdentifier": "com.sabrivatan.farz"
+      "bundleIdentifier": "com.farz.app"
     },
     "android": {
+      "versionCode": 2,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#ffffff"
+        "backgroundColor": "#064e3b"
       },
-      "package": "com.sabrivatan.farz",
+      "package": "com.farz.app",
       "edgeToEdgeEnabled": true,
-      "predictiveBackGestureEnabled": false
+      "predictiveBackGestureEnabled": false,
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ],
+      "blockedPermissions": [
+        "android.permission.ACTIVITY_RECOGNITION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
@@ -50,10 +59,15 @@
         "react-native-google-mobile-ads",
         {
           "androidAppId": "ca-app-pub-2937808553151023~3453704702",
-          "iosAppId": "ca-app-pub-3940256099942544~1458002511" 
+          "iosAppId": "ca-app-pub-3940256099942544~1458002511"
         }
-      ],
-      "react-native-google-mobile-ads"
-    ]
+      ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "4ed89432-6111-4476-b58f-6f5113642ccb"
+      }
+    }
   }
 }

@@ -1,7 +1,7 @@
 import { useState, useRef } from "react";
 import { View, Text, TouchableOpacity, Image, StatusBar, Dimensions, ScrollView, NativeScrollEvent, NativeSyntheticEvent } from "react-native";
 import { useRouter } from "expo-router";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"; // Import hook
 import { ArrowRight, ShieldCheck, Moon } from "lucide-react-native";
 import { LinearGradient } from "expo-linear-gradient";
 import { useTranslation } from "react-i18next"; // Added
@@ -10,6 +10,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
 export default function OnboardingFlow() {
   const router = useRouter();
+  const insets = useSafeAreaInsets(); // Get insets
   const { t, i18n } = useTranslation(); // Added
   const scrollViewRef = useRef<ScrollView>(null);
   const [currentPage, setCurrentPage] = useState(0);
@@ -29,7 +30,7 @@ export default function OnboardingFlow() {
       <StatusBar barStyle="light-content" />
       
       {/* Language Selector */}
-      <View className="absolute top-14 w-full z-50 flex-row justify-center gap-6">
+      <View className="w-full z-50 flex-row justify-center gap-6 mt-4 mb-2">
         {['tr', 'en', 'ar'].map((lang) => (
           <TouchableOpacity 
             key={lang} 
@@ -149,7 +150,10 @@ export default function OnboardingFlow() {
       </ScrollView>
 
       {/* Bottom Controls */}
-      <View className="absolute bottom-0 left-0 right-0 p-8 bg-emerald-deep">
+      <View 
+        className="absolute bottom-0 left-0 right-0 p-8 bg-emerald-deep"
+        style={{ paddingBottom: Math.max(insets.bottom, 20) + 10 }}
+      >
         <View className="items-center mb-8 flex-row justify-center gap-2">
           {[0, 1, 2].map((i) => (
             <View 
