@@ -2,7 +2,7 @@
   "expo": {
     "name": "Farz",
     "slug": "Farz",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "scheme": "farz",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -23,7 +23,7 @@
       "bundleIdentifier": "com.farz.app"
     },
     "android": {
-      "versionCode": 2,
+      "versionCode": 3,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#064e3b"

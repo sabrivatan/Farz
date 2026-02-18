@@ -19,6 +19,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import CustomAlert from '@/components/CustomAlert';
 import { calculatePrayerDebt, calculateFastingDebt } from '@/lib/calculations';
 import { differenceInDays } from 'date-fns';
+import { NotificationService } from '@/services/NotificationService';
 
 const PRAYER_TIMES = [
     { key: 'fajr', label: 'Sabah' },
@@ -299,9 +300,17 @@ export default function SettingsScreen() {
         await AsyncStorage.setItem('settings.prayer_reminders', JSON.stringify(newReminders));
         
         // Reschedule notifications with new settings
-        // We need to get current location to reschedule. 
-        // For now, we'll just invalidate. ideally we'd call NotificationService.schedule here if we had location.
-        // It will be rescheduled on next app open or dashboard load.
+        try {
+            const lastLocationStr = await AsyncStorage.getItem('last_known_location');
+            if (lastLocationStr) {
+                const lastLocation = JSON.parse(lastLocationStr);
+                if (lastLocation.lat && lastLocation.lng) {
+                     await NotificationService.schedulePrayerNotifications(lastLocation);
+                }
+            }
+        } catch (e) {
+            console.log('Error rescheduling notifications on setting change', e);
+        }
     };
 
     const toggleAllPrayerReminders = (enabled: boolean) => {

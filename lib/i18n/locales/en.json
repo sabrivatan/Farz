@@ -1,6 +1,7 @@
 {
   "dashboard": {
     "title": "Today's Worship",
+    "todays_worship": "Today's Worship",
     "quick_access": "Quick Access",
     "missed_prayer": "Missed Prayer",
     "missed_fasting": "Missed Fasting",
@@ -235,7 +236,7 @@
     "start": "Let's Start",
     "calculation_title": "Calculate Debt",
     "step_1": "Step 1/1",
-    "info_text": "Please enter your information completely for an accurate calculation. This information is stored only on your device.",
+    "info_text": "Your debts are calculated based on the 'Puberty Date' you entered. Please enter the information completely for an accurate result.",
     "gender": "Gender",
     "male": "Male",
     "female": "Female",
@@ -246,6 +247,7 @@
     "prayer_start_date": "Regular Prayer Start",
     "fasting_start_date": "Regular Fasting Start",
     "start_today_hint": "If you never started, you can select today.",
+    "select_today": "Select Today",
     "calculate_and_start": "Calculate and Start"
   },
   "stats": {

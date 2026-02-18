@@ -28,6 +28,8 @@ export default function NotificationsScreen() {
     const [notifications, setNotifications] = useState<NotificationItem[]>([]);
 
     useEffect(() => {
+        // Mark as read immediately on open
+        AsyncStorage.setItem('last_notification_read_date', new Date().toISOString());
         generateNotifications();
     }, [i18n.language]);
 
@@ -149,8 +151,7 @@ export default function NotificationsScreen() {
         allNotifications.sort((a, b) => b.date.getTime() - a.date.getTime());
         setNotifications(allNotifications);
         
-        // Mark as read locally (clear badge)
-        AsyncStorage.setItem('last_notification_read_date', now.toISOString());
+
     };
 
     const getDateLocale = () => {

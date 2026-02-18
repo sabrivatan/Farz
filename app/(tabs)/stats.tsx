@@ -9,10 +9,13 @@ import { useTranslation } from 'react-i18next'; // Added
 
 const { width } = Dimensions.get('window');
 import { GlobalBannerAd } from '@/components/ads/GlobalBannerAd';
+import { useInterstitialAd } from '@/hooks/useInterstitialAd';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 export default function StatsScreen() {
     const router = useRouter();
     const { t, i18n } = useTranslation(); // Added
+    const { showAd, loaded } = useInterstitialAd();
     const [activeTab, setActiveTab] = useState<'prayer' | 'fasting'>('prayer');
     
     const [stats, setStats] = useState({
@@ -40,6 +43,27 @@ export default function StatsScreen() {
             fetchStats();
         }, [i18n.language]) // Re-fetch on language change to update formatted dates
     );
+
+    // Check and show Interstitial Ad (Once daily)
+    useEffect(() => {
+        if (loaded) {
+            checkAndShowAd();
+        }
+    }, [loaded]);
+
+    const checkAndShowAd = async () => {
+        try {
+            const today = new Date().toDateString();
+            const lastAdDate = await AsyncStorage.getItem('stats_ad_shown_date');
+
+            if (lastAdDate !== today) {
+                showAd();
+                await AsyncStorage.setItem('stats_ad_shown_date', today);
+            }
+        } catch (error) {
+            console.error('Ad check error:', error);
+        }
+    };
 
     const fetchStats = async () => {
         try {

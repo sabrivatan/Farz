@@ -1,4 +1,5 @@
 import { format } from 'date-fns';
+import { NotificationService } from '@/services/NotificationService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { View, Text, ScrollView, TouchableOpacity, Dimensions, Image, Platform, Alert } from "react-native";
 import { useRouter, useFocusEffect } from 'expo-router';
@@ -30,7 +31,8 @@ import {
     BarChart2,
     CalendarDays,
     Activity,
-    Info
+    Info,
+    Loader2
 } from 'lucide-react-native';
 import { CalculationMethod, PrayerTimes, Coordinates } from 'adhan';
 import Svg, { Path } from 'react-native-svg';
@@ -41,6 +43,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 type PrayerKey = 'fajr' | 'dhuhr' | 'asr' | 'maghrib' | 'isha';
 
 import CustomAlert from '@/components/CustomAlert';
+import { Animated, Easing } from 'react-native'; // Import Animated
 
 export default function Dashboard() {
   const router = useRouter();
@@ -54,9 +57,33 @@ export default function Dashboard() {
   const [nextPrayerKey, setNextPrayerKey] = useState<string>('fajr'); // Changed to key
   const [coords, setCoords] = useState<{ latitude: number, longitude: number } | null>(null);
   const [debts, setDebts] = useState<{ totalPrayer: number, fasting: number }>({ totalPrayer: 0, fasting: 0 }); 
-  const [locationName, setLocationName] = useState('İstanbul'); 
+  const [locationName, setLocationName] = useState('İstanbul');
+  const [isLocationUpdating, setIsLocationUpdating] = useState(false); // New State
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [effDate, setEffDate] = useState<Date>(new Date());
+  
+  // Animation
+  const spinValue = useState(new Animated.Value(0))[0];
+
+  useEffect(() => {
+      if (isLocationUpdating) {
+          Animated.loop(
+              Animated.timing(spinValue, {
+                  toValue: 1,
+                  duration: 1000,
+                  easing: Easing.linear,
+                  useNativeDriver: true,
+              })
+          ).start();
+      } else {
+          spinValue.setValue(0);
+      }
+  }, [isLocationUpdating]);
+
+  const spin = spinValue.interpolate({
+      inputRange: [0, 1],
+      outputRange: ['0deg', '360deg'],
+  });
 
   // Custom Alert State
   const [alertVisible, setAlertVisible] = useState(false);
@@ -79,25 +106,40 @@ export default function Dashboard() {
           // 2. Check General Notifications (from Background Service cache)
           const latestGeneralStr = await AsyncStorage.getItem('latest_general_notification_date');
           if (latestGeneralStr) {
-              const latestGeneral = new Date(latestGeneralStr);
-              if (latestGeneral > lastRead) unreadFound = true;
+               const enabledGen = await AsyncStorage.getItem('settings.general_notifications');
+               if (enabledGen !== 'false') {
+                  const latestGeneral = new Date(latestGeneralStr);
+                  if (latestGeneral > lastRead) unreadFound = true;
+               }
           }
 
           // 3. Check Prayer Notifications (Local)
-          // We check if the most recent passed prayer is > lastRead
-          // We can use the 'prayerTimes' state if available, or calc local
           if (!unreadFound && prayerTimes) {
+                // Load Settings
+                let prayerReminders = { fajr: true, dhuhr: true, asr: true, maghrib: true, isha: true };
+                try {
+                    const savedReminders = await AsyncStorage.getItem('settings.prayer_reminders');
+                    if (savedReminders) prayerReminders = JSON.parse(savedReminders);
+                } catch (e) {}
+
                const now = new Date();
-               const passedPrayers = [
-                   prayerTimes.fajr,
-                   prayerTimes.dhuhr, 
-                   prayerTimes.asr,
-                   prayerTimes.maghrib,
-                   prayerTimes.isha
-               ].filter(t => t < now);
                
+               // Check each prayer if enabled
+               const passedPrayers = [];
+               
+               if (prayerReminders.fajr && prayerTimes.fajr < now) passedPrayers.push(prayerTimes.fajr);
+               if (prayerReminders.dhuhr && prayerTimes.dhuhr < now) passedPrayers.push(prayerTimes.dhuhr);
+               if (prayerReminders.asr && prayerTimes.asr < now) passedPrayers.push(prayerTimes.asr);
+               if (prayerReminders.maghrib && prayerTimes.maghrib < now) passedPrayers.push(prayerTimes.maghrib);
+               if (prayerReminders.isha && prayerTimes.isha < now) passedPrayers.push(prayerTimes.isha);
+
+               // Check Check-in (30 mins after Isha) - Assuming always enabled or linked to Isha? 
+               // For now let's assume it's implicit or linked to Isha for simplicity in badge logic, 
+               // or just ignore to avoid confusion if user didn't get a specific setting for it.
+               // Let's stick to the prayers they explicitly enabled.
+
                if (passedPrayers.length > 0) {
-                   const lastPassed = passedPrayers[passedPrayers.length - 1];
+                   const lastPassed = passedPrayers[passedPrayers.length - 1]; // Latest one
                    if (lastPassed > lastRead) unreadFound = true;
                }
           }
@@ -289,14 +331,31 @@ export default function Dashboard() {
 
   useEffect(() => {
       (async () => {
+          // 0. Load Cached Location Immediately
+          try {
+              const cachedLocation = await AsyncStorage.getItem('last_known_location');
+              const cachedCity = await AsyncStorage.getItem('last_location_name');
+              
+              if (cachedLocation) {
+                  const { lat, lng } = JSON.parse(cachedLocation);
+                  calculatePrayerTimes({ latitude: lat, longitude: lng });
+              }
+              if (cachedCity) {
+                  setLocationName(cachedCity);
+              }
+          } catch (e) {
+              console.log('Error loading cached location', e);
+          }
+
           let { status } = await Location.requestForegroundPermissionsAsync();
           if (status !== 'granted') {
               setErrorMsg(t('dashboard.location_denied'));
-              calculatePrayerTimes();
+              if (!prayerTimes) calculatePrayerTimes(); // Only calc default if no cache
               return;
           }
 
           try {
+            setIsLocationUpdating(true); // Start Loop
             let location = await Location.getCurrentPositionAsync({});
             try {
                 let reverseGeocode = await Location.reverseGeocodeAsync({
@@ -306,13 +365,27 @@ export default function Dashboard() {
                 if (reverseGeocode && reverseGeocode.length > 0) {
                     const city = reverseGeocode[0].city || reverseGeocode[0].subregion || 'Konum';
                     setLocationName(city);
+                    AsyncStorage.setItem('last_location_name', city); // Cache city
                 }
             } catch (e) { console.log('Reverse geocode error', e); }
             
             calculatePrayerTimes(location.coords);
+            
+            // Save location and schedule notifications
+            AsyncStorage.setItem('last_known_location', JSON.stringify({
+                lat: location.coords.latitude,
+                lng: location.coords.longitude
+            }));
+            NotificationService.schedulePrayerNotifications({
+                lat: location.coords.latitude,
+                lng: location.coords.longitude
+            });
+
           } catch (e) {
               console.error("Location error:", e);
               calculatePrayerTimes();
+          } finally {
+              setIsLocationUpdating(false); // Stop Loop
           }
       })();
   }, []);
@@ -342,6 +415,11 @@ export default function Dashboard() {
                         <View className="flex-row items-center gap-1 mt-1">
                             <MapPin size={14} color="#D2691E" />
                             <Text className="text-white font-bold text-sm">{locationName}</Text>
+                            {isLocationUpdating && (
+                                <Animated.View style={{ transform: [{ rotate: spin }], marginLeft: 4 }}>
+                                    <Loader2 size={12} color="#D2691E" />
+                                </Animated.View>
+                            )}
                         </View>
                     </View>
                     <TouchableOpacity 

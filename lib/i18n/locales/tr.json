@@ -236,7 +236,7 @@
     "start": "Başlayalım",
     "calculation_title": "Borç Hesapla",
     "step_1": "Adım 1/1",
-    "info_text": "Doğru bir hesaplama için lütfen bilgilerinizi eksiksiz girin. Bu bilgiler sadece cihazınızda saklanır.",
+    "info_text": "Borçlarınız, girdiğiniz 'Buluğ Çağı' tarihi referans alınarak hesaplanmaktadır. Doğru bir sonuç için lütfen bilgileri eksiksiz girin.",
     "gender": "Cinsiyet",
     "male": "Erkek",
     "female": "Kadın",
@@ -247,6 +247,7 @@
     "prayer_start_date": "Düzenli Namaza Başlama",
     "fasting_start_date": "Düzenli Oruca Başlama",
     "start_today_hint": "Hiç başlamadıysanız bugünü seçebilirsiniz.",
+    "select_today": "Bugünü Seç",
     "calculate_and_start": "Hesapla ve Başla"
   },
   "stats": {

@@ -8,12 +8,12 @@ import { calculateBulughDate, Gender } from "@/lib/calculations";
 import { getDb } from "@/db";
 import { useTranslation } from "react-i18next"; // Added
 
-import { useInterstitialAd } from '@/hooks/useInterstitialAd';
+
 
 export default function CalculationScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets(); // Get safe area insets
-  const { showAd, loaded } = useInterstitialAd();
+
   const { t, i18n } = useTranslation(); // Added
   
   // Form state
@@ -140,12 +140,6 @@ export default function CalculationScreen() {
         ['fasting', fastingDebtDays]
       );
 
-      // Show Interstitial Ad before navigation
-      if (showAd && loaded) {
-          try {
-            showAd();
-          } catch (e) { console.log('Ad failed', e); }
-      }
       
       // Navigate to main app
       router.replace("/(tabs)");
@@ -248,9 +242,16 @@ export default function CalculationScreen() {
                     </Text>
                     <Calendar size={20} color="#D2691E" />
                  </TouchableOpacity>
-                 <Text className="text-emerald-400/60 text-[10px] mt-2 ml-1">
-                    {t('onboarding.start_today_hint')}
-                 </Text>
+                 <View className="flex-row items-center justify-between mt-2">
+                    <Text className="text-emerald-400/60 text-[10px] ml-1 flex-1">
+                        {t('onboarding.start_today_hint')}
+                    </Text>
+                     <TouchableOpacity onPress={() => setPrayerStartDate(new Date())}>
+                        <Text className="text-primary text-xs font-bold underline">
+                            {t('onboarding.select_today')}
+                        </Text>
+                    </TouchableOpacity>
+                 </View>
             </View>
 
              <View className="mb-6">
@@ -264,6 +265,16 @@ export default function CalculationScreen() {
                     </Text>
                     <Calendar size={20} color="#D2691E" />
                  </TouchableOpacity>
+                 <View className="flex-row items-center justify-between mt-2">
+                    <Text className="text-emerald-400/60 text-[10px] ml-1 flex-1">
+                        {t('onboarding.start_today_hint')}
+                    </Text>
+                    <TouchableOpacity onPress={() => setFastingStartDate(new Date())}>
+                        <Text className="text-primary text-xs font-bold underline">
+                            {t('onboarding.select_today')}
+                        </Text>
+                    </TouchableOpacity>
+                 </View>
             </View>
 
         </View>

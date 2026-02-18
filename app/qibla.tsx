@@ -10,6 +10,7 @@ import { useTranslation } from 'react-i18next';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const COMPASS_SIZE = SCREEN_WIDTH * 0.75;
+import { GlobalBannerAd } from '@/components/ads/GlobalBannerAd';
 
 // Kaaba coordinates
 const KAABA_LAT = 21.4225;
@@ -359,7 +360,8 @@ export default function QiblaFinder() {
                         </View>
                     </View>
                 </View>
-            </SafeAreaView>
-        </View>
+                <GlobalBannerAd />
+                </SafeAreaView>
+            </View>
     );
 }

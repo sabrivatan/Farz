@@ -3,11 +3,26 @@ import * as TaskManager from 'expo-task-manager';
 import * as Notifications from 'expo-notifications';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '@/lib/supabase';
+import { NotificationService } from './NotificationService';
 
 const BACKGROUND_FETCH_TASK = 'background-fetch-notifications';
 
 TaskManager.defineTask(BACKGROUND_FETCH_TASK, async () => {
   try {
+    // 0. Refresh Prayer Notifications (Always try to schedule if we have location)
+    try {
+        const lastLocationStr = await AsyncStorage.getItem('last_known_location');
+        if (lastLocationStr) {
+            const lastLocation = JSON.parse(lastLocationStr);
+            if (lastLocation.lat && lastLocation.lng) {
+                 await NotificationService.schedulePrayerNotifications(lastLocation);
+                 console.log('Background: Refreshed prayer schedule');
+            }
+        }
+    } catch (e) {
+        console.log('Background: Failed to refresh prayer schedule', e);
+    }
+
     // 1. Check if General Notifications are enabled
     const enabled = await AsyncStorage.getItem('settings.general_notifications');
     if (enabled === 'false') {
