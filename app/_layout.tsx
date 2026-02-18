@@ -9,7 +9,11 @@ import mobileAds from '@/lib/admob';
 
 import { registerBackgroundFetchAsync } from '@/services/BackgroundService';
 
+import { useTrackingTransparency } from "@/hooks/useTrackingTransparency";
+
 export default function Layout() {
+  useTrackingTransparency();
+
   useEffect(() => {
     try {
       if (mobileAds) {

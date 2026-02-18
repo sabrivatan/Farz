@@ -2,7 +2,10 @@ import React from 'react';
 import { View, Platform, Text } from 'react-native';
 import { BannerAd, BannerAdSize, TestIds } from '@/lib/admob';
 
-const adUnitId = 'ca-app-pub-2937808553151023/9329672321'; // Real Android Banner ID
+const adUnitId = Platform.select({
+  ios: 'ca-app-pub-2937808553151023/6928741828',
+  android: 'ca-app-pub-2937808553151023/9329672321', // Real Android Banner ID
+}) || TestIds.BANNER;
 
 export const GlobalBannerAd = ({ delay = 0 }: { delay?: number }) => {
   const [adError, setAdError] = React.useState(false);
