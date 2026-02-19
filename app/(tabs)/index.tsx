@@ -347,6 +347,10 @@ export default function Dashboard() {
               console.log('Error loading cached location', e);
           }
 
+          // 1. Request Notification Permissions
+          await NotificationService.requestPermissions();
+
+          // 2. Request Location Permissions
           let { status } = await Location.requestForegroundPermissionsAsync();
           if (status !== 'granted') {
               setErrorMsg(t('dashboard.location_denied'));
