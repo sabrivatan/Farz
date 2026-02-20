@@ -47,40 +47,26 @@ export default function NotificationsScreen() {
             console.log('Error loading prayer reminders', e);
         }
 
-        // 2. Fetch Supabase Notifications (General)
-        let generalNotifications: NotificationItem[] = [];
-        try {
-            const { data, error } = await supabase
-                .from('app_notifications')
-                .select('*')
-                .eq('active', true)
-                .order('created_at', { ascending: false });
-
-            if (data && !error) {
-                generalNotifications = data.map((n: any) => ({
-                    id: n.id,
-                    title: n.title,
-                    message: n.message,
-                    date: new Date(n.created_at),
-                    type: n.type || 'info', // 'general', 'alert', 'info'
-                    read: false // Logic for read status to be added
-                }));
-            }
-        } catch (e) {
-            console.log('Error fetching general notifications', e);
-        }
-
-        // 3. Generate Prayer Notifications (Simulated History)
-        // Get Location
+        // 2. Generate Prayer Notifications (Local - Immediate)
+        // Get Location (prefer cache for speed)
         let latitude = 41.0082;
         let longitude = 28.9784;
         
         try {
-            const { status } = await Location.getForegroundPermissionsAsync();
-            if (status === 'granted') {
-                const location = await Location.getCurrentPositionAsync({});
-                latitude = location.coords.latitude;
-                longitude = location.coords.longitude;
+            // Try Cache First
+            const cachedLocation = await AsyncStorage.getItem('last_known_location');
+            if (cachedLocation) {
+                const { lat, lng } = JSON.parse(cachedLocation);
+                latitude = lat;
+                longitude = lng;
+            } else {
+                // Fallback to fresh location
+                const { status } = await Location.getForegroundPermissionsAsync();
+                if (status === 'granted') {
+                    const location = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced }); 
+                    latitude = location.coords.latitude;
+                    longitude = location.coords.longitude;
+                }
             }
         } catch (e) {
             console.log('Location error default to Istanbul', e);
@@ -91,7 +77,6 @@ export default function NotificationsScreen() {
         const generatedPrayerNotifications: NotificationItem[] = [];
         const now = new Date();
 
-        // Specific prayer names map to ensure translation
         const prayerNames = {
             fajr: t('prayers.fajr'),
             dhuhr: t('prayers.dhuhr'),
@@ -112,9 +97,9 @@ export default function NotificationsScreen() {
                 { key: 'asr', time: times.asr, icon: '🌤️' },
                 { key: 'maghrib', time: times.maghrib, icon: '🌇' },
                 { key: 'isha', time: times.isha, icon: '🌌' },
-            ].filter(p => prayerReminders[p.key as keyof typeof prayerReminders]); // FILTER HERE
+            ].filter(p => prayerReminders[p.key as keyof typeof prayerReminders]); 
 
-            // Add Check-in notification (30 mins after Isha) - Always add unless logic changes
+            // Check-in
             const checkInTime = new Date(times.isha);
             checkInTime.setMinutes(checkInTime.getMinutes() + 30);
             
@@ -129,7 +114,7 @@ export default function NotificationsScreen() {
                 });
             }
 
-            // Filter prayers that have passed
+            // Passed prayers
             prayers.forEach(p => {
                 if (p.time < now) {
                     generatedPrayerNotifications.push({
@@ -143,15 +128,39 @@ export default function NotificationsScreen() {
                 }
             });
         }
-
-        // 4. Merge
-        const allNotifications = [...generalNotifications, ...generatedPrayerNotifications];
-
-        // Sort by date descending
-        allNotifications.sort((a, b) => b.date.getTime() - a.date.getTime());
-        setNotifications(allNotifications);
         
+        // SET LOCAL NOTIFICATIONS FIRST (Fast UI)
+        generatedPrayerNotifications.sort((a, b) => b.date.getTime() - a.date.getTime());
+        setNotifications(generatedPrayerNotifications);
 
+        // 3. Fetch Supabase Notifications (Async - Background)
+        try {
+            const { data, error } = await supabase
+                .from('app_notifications')
+                .select('*')
+                .eq('active', true)
+                .order('created_at', { ascending: false });
+
+            if (data && !error) {
+                const generalNotifications = data.map((n: any) => ({
+                    id: n.id,
+                    title: n.title,
+                    message: n.message,
+                    date: new Date(n.created_at),
+                    type: n.type || 'info', 
+                    read: false 
+                }));
+
+                // Merge and Sort
+                setNotifications(prev => {
+                    const merged = [...prev, ...generalNotifications];
+                    merged.sort((a, b) => b.date.getTime() - a.date.getTime());
+                    return merged;
+                });
+            }
+        } catch (e) {
+            console.log('Error fetching general notifications', e);
+        }
     };
 
     const getDateLocale = () => {

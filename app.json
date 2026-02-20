@@ -2,7 +2,7 @@
   "expo": {
     "name": "Farz",
     "slug": "Farz",
-    "version": "1.0.3",
+    "version": "1.0.4",
     "scheme": "farz",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -22,10 +22,11 @@
         "NSUserTrackingUsageDescription": "Bu tanımlayıcı, size kişiselleştirilmiş reklamlar sunmak için kullanılacaktır.",
         "ITSAppUsesNonExemptEncryption": false
       },
-      "bundleIdentifier": "com.farz.app"
+      "bundleIdentifier": "com.farz.app",
+      "buildNumber": "5"
     },
     "android": {
-      "versionCode": 4,
+      "versionCode": 5,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#064e3b"

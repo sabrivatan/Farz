@@ -1,4 +1,4 @@
-package com.sabrivatan.farz
+package com.farz.app
 
 import android.os.Build
 import android.os.Bundle

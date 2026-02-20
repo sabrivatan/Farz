@@ -1,4 +1,4 @@
-package com.sabrivatan.farz
+package com.farz.app
 
 import android.app.Application
 import android.content.res.Configuration
