@@ -159,7 +159,13 @@
       "forgot_pass_desc": "Enter your email address and we'll send you a link to reset your password.",
       "send_link_button": "Send Link",
       "reset_link_sent": "Password reset link sent to your email address.",
-      "error_enter_email": "Please enter your email address."
+      "error_enter_email": "Please enter your email address.",
+      "update_pass_title": "Update Password",
+      "update_pass_header": "Set New Password",
+      "update_pass_desc": "Please enter your new password for your account.",
+      "new_password_placeholder": "Your New Password",
+      "update_button": "Update Password",
+      "update_success": "Your password has been successfully updated!"
   },
   "history": {
     "title": "Edit Debt",

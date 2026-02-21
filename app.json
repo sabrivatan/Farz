@@ -2,7 +2,7 @@
   "expo": {
     "name": "Farz",
     "slug": "Farz",
-    "version": "1.0.4",
+    "version": "1.0.8",
     "scheme": "farz",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,16 +17,17 @@
       "supportsTablet": true,
       "infoPlist": {
         "UIBackgroundModes": [
+          "fetch",
           "fetch"
         ],
         "NSUserTrackingUsageDescription": "Bu tanımlayıcı, size kişiselleştirilmiş reklamlar sunmak için kullanılacaktır.",
         "ITSAppUsesNonExemptEncryption": false
       },
       "bundleIdentifier": "com.farz.app",
-      "buildNumber": "5"
+      "buildNumber": "8"
     },
     "android": {
-      "versionCode": 5,
+      "versionCode": 8,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#064e3b"
@@ -39,9 +40,15 @@
         "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.POST_NOTIFICATIONS",
+        "com.google.android.gms.permission.AD_ID",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.POST_NOTIFICATIONS",
         "com.google.android.gms.permission.AD_ID"
       ],
       "blockedPermissions": [
+        "android.permission.ACTIVITY_RECOGNITION",
         "android.permission.ACTIVITY_RECOGNITION"
       ]
     },
@@ -74,6 +81,12 @@
       "eas": {
         "projectId": "4ed89432-6111-4476-b58f-6f5113642ccb"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/4ed89432-6111-4476-b58f-6f5113642ccb"
     }
   }
 }

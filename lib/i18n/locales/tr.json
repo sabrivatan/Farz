@@ -159,7 +159,13 @@
       "forgot_pass_desc": "E-posta adresinizi girin, size şifrenizi sıfırlamanız için bir bağlantı gönderelim.",
       "send_link_button": "Bağlantı Gönder",
       "reset_link_sent": "Şifre sıfırlama bağlantısı e-posta adresinize gönderildi.",
-      "error_enter_email": "Lütfen e-posta adresinizi girin."
+      "error_enter_email": "Lütfen e-posta adresinizi girin.",
+      "update_pass_title": "Şifre Güncelle",
+      "update_pass_header": "Yeni Şifre Belirle",
+      "update_pass_desc": "Lütfen uygulamanız için yeni şifrenizi girin.",
+      "new_password_placeholder": "Yeni Şifreniz",
+      "update_button": "Şifreyi Güncelle",
+      "update_success": "Şifreniz başarıyla güncellendi!"
   },
   "history": {
     "title": "Borcu Düzenle",

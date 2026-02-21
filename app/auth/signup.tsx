@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 import { SyncService } from '@/services/SyncService';
 import { ChevronLeft, User, Mail, Lock, Check, Eye, EyeOff } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
 
 import CustomAlert from '@/components/CustomAlert';
 import { useTranslation } from 'react-i18next';
@@ -64,6 +65,7 @@ export default function Signup() {
     const surname = nameParts.length > 1 ? nameParts.pop() : '';
     const name = nameParts.join(' ');
 
+    const redirectUrl = Linking.createURL('auth/login');
     const {
       data: { session },
       error,
@@ -71,6 +73,7 @@ export default function Signup() {
       email,
       password,
       options: {
+        emailRedirectTo: redirectUrl,
         data: {
           name: name,
           surname: surname,

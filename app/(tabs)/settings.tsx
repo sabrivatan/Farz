@@ -132,6 +132,15 @@ export default function SettingsScreen() {
             await i18n.changeLanguage(lang);
             await AsyncStorage.setItem('user-language', lang);
             I18nManager.forceRTL(lang === 'ar');
+            
+            // Reschedule notifications with the new language strings
+            const lastLocationStr = await AsyncStorage.getItem('last_known_location');
+            if (lastLocationStr) {
+                const lastLocation = JSON.parse(lastLocationStr);
+                if (lastLocation.lat && lastLocation.lng) {
+                     await NotificationService.schedulePrayerNotifications(lastLocation);
+                }
+            }
         } catch (error) {
             console.error('Error changing language:', error);
         }

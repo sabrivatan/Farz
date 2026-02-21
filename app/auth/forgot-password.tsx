@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '@/lib/supabase';
 import { ChevronLeft, Mail } from 'lucide-react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import * as Linking from 'expo-linking';
 
 import CustomAlert from '@/components/CustomAlert';
 import { useTranslation } from 'react-i18next';
@@ -44,8 +45,9 @@ export default function ForgotPassword() {
 
     setLoading(true);
     
+    const redirectUrl = Linking.createURL('auth/update-password');
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: 'farz://auth/reset-callback', // Or whatever your deep link is configured to
+        redirectTo: redirectUrl,
     });
 
     if (error) {
